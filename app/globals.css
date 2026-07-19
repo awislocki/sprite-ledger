@@ -158,29 +158,31 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 
 .vstrip {
   position: relative; z-index: 1;
-  display: flex; gap: 8px; overflow-x: auto;
-  padding: 10px 2px 4px; scrollbar-width: none;
-  /* keep the lower-right corner clear so the hero owns it */
-  margin-right: 76px;
+  display: flex; flex-wrap: wrap; gap: 7px;
+  padding: 10px 2px 4px;
+  /* keep the lower-right corner clear so the hero owns it; tiles wrap to
+     a second row on narrow screens instead of clipping */
+  margin-right: 74px;
 }
-.vstrip::-webkit-scrollbar { display: none; }
 
 /* Variant tiles: the background IS the variant label —
    gold sheen, candy gummy, starfield galaxy, faceted gem, iridescent
    holofoil, cube glow, quack yellow. Colour = owned; grey = not. */
 .vtile {
-  flex: none; width: 66px;
-  position: relative; overflow: hidden;
+  flex: none; width: 60px;
+  position: relative;
   display: flex; flex-direction: column; align-items: center;
-  padding: 6px 4px; border-radius: 12px;
+  padding: 5px 3px; border-radius: 12px;
   border: 1px solid var(--line);
 }
 .vtile::before {
   content: ""; position: absolute; inset: 0; z-index: 0;
+  border-radius: 11px; overflow: hidden;
   background: var(--vbg);
   transition: filter 0.3s ease;
 }
-.vtile.vv-normal   { --vbg: linear-gradient(150deg, #303a4e, #171c28 70%); }
+/* Base gets a light steel-blue so it reads against the card background */
+.vtile.vv-normal   { --vbg: linear-gradient(150deg, #b9c9dd, #7e93ad 55%, #4d5f78); }
 .vtile.vv-gold     { --vbg: linear-gradient(150deg, #f6e09a, #d4a93f 45%, #7c5f1c); }
 .vtile.vv-gummy    { --vbg: linear-gradient(150deg, #ffb3e0, #f75fae 55%, #a52c6d); }
 .vtile.vv-galaxy   {
@@ -198,18 +200,31 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .vtile.vv-cube     { --vbg: linear-gradient(150deg, #8a3df0, #4a1e8e 55%, #1c0b38), radial-gradient(circle at 50% 60%, #c26bff 0%, transparent 70%); }
 .vtile.vv-quack    { --vbg: linear-gradient(150deg, #ffe08a, #ffb347 55%, #d97e1f); }
 
-.vtile-img { position: relative; z-index: 1; width: 54px; height: 54px; }
+.vtile-img { position: relative; z-index: 1; width: 48px; height: 48px; }
 .vtile-img img { width: 100%; height: 100%; object-fit: contain; }
 
-/* Owned: full-colour variant background + the sprite's accent ring */
+/* Owned: full-colour variant background, solid accent ring, ✓ badge */
 .vtile.owned {
-  border-color: color-mix(in srgb, var(--accent) 65%, var(--line));
-  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 25%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 85%, var(--line));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 35%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, white 18%, transparent);
+}
+.vtile.owned .vtile-img::after {
+  content: "✓"; position: absolute; right: -5px; bottom: -4px;
+  width: 15px; height: 15px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--accent) 85%, white);
+  color: var(--obsidian);
+  font-size: 10px; font-weight: 800; line-height: 1;
 }
 
-/* Missing: everything desaturated, lock badge stays legible */
-.vtile.missing::before { filter: grayscale(1) brightness(0.4); }
-.vtile.missing .vtile-img img { filter: grayscale(1) brightness(0.5); }
+/* Missing: flat near-black, dashed outline, ghosted art + lock */
+.vtile.missing { border-style: dashed; border-color: #2c3550; }
+.vtile.missing::before { filter: grayscale(1) brightness(0.22); }
+.vtile.missing .vtile-img img {
+  filter: grayscale(1) brightness(0.45);
+  opacity: 0.75;
+}
 .vlock {
   position: absolute; right: -2px; bottom: -2px; z-index: 2;
   font-size: 13px; line-height: 1;
