@@ -55,7 +55,10 @@ const REDEEM = [
   ["grimreaper_gummy", "Active"], ["grimreaper_galaxy", "Active"],
 ];
 
-export const EXPECTED = { owned: 47, pending: 25 };
+// 47 from redeem quests + Seven Gold (owned vtid token) + Seven Base
+// (backpack style tag) = 49. The Fire Base backpack tag overlaps a
+// quest-claimed variant and must not double count.
+export const EXPECTED = { owned: 49, pending: 25 };
 
 export function fixtureItems() {
   const items = REDEEM.map(([suffix, state], i) => ({
@@ -121,6 +124,30 @@ export function fixtureItems() {
       profileId: "athena",
     }
   );
+
+  // Directly-owned variant token (granted outside the quest flow — vending,
+  // later phases). This is how sprites like Seven appear when no redeem
+  // quest exists yet; the /sprite/i server filter used to drop these.
+  items.push({
+    itemId: "token-owned-1",
+    templateId: "CosmeticVariantToken:vtid_backpack_coldtrophy_seven_gold",
+    quantity: 1,
+    attributes: { level: 1 },
+    profileId: "athena",
+  });
+
+  // The Sprite Mastery Pod backpack with its owned style tags — ground truth
+  // in a second encoding. Mat0 = empty pod (skip), Mesh.Mat13 = Fire Base
+  // (already owned via quest — no double count), Stage26 = Seven Base.
+  items.push({
+    itemId: "backpack-1",
+    templateId: "AthenaBackpack:bid_a1b2_coldtrophy",
+    quantity: 1,
+    attributes: {
+      variants: [{ channel: "Mesh", active: "Mat13", owned: ["Mat0", "Mesh.Mat13", "Stage26"] }],
+    },
+    profileId: "athena",
+  });
 
   // Unknown future slug — must land in `unmapped`, not be dropped.
   items.push({

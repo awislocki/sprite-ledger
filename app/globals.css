@@ -84,21 +84,50 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .rows { display: flex; flex-direction: column; gap: 10px; padding: 10px 0 20px; }
 
 .srow {
+  position: relative; overflow: hidden;
   background: var(--ridge);
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 12px 12px 10px;
 }
 .srow.started { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
-.srow.untouched { opacity: 0.8; }
-
-.srow-head { display: flex; align-items: center; gap: 10px; }
-.srow-icon {
-  width: 44px; height: 44px; object-fit: contain;
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 35%, transparent));
+.srow.untouched { opacity: 0.85; }
+.srow.mastered {
+  border-color: color-mix(in srgb, var(--dust) 60%, var(--line));
+  box-shadow: inset 0 0 24px color-mix(in srgb, var(--dust) 8%, transparent);
 }
-.srow.untouched .srow-icon { filter: grayscale(1) brightness(0.65); }
-.srow-head h3 { font-family: var(--display); font-size: 16px; font-weight: 600; flex: 1; }
+
+/* Hero: big, tilted, bleeding past the top-right corner (clipped by the
+   card), monochrome until the row scrolls into the centre of the screen. */
+.srow-hero {
+  position: absolute; right: -20px; top: -18px; z-index: 0;
+  width: 132px; height: 132px; object-fit: contain;
+  transform: rotate(-14deg) scale(1);
+  filter: grayscale(1) brightness(0.62) contrast(1.05);
+  opacity: 0.9;
+  pointer-events: none;
+  transition: filter 0.5s ease, transform 0.5s ease, opacity 0.5s ease;
+}
+.srow.infocus .srow-hero {
+  filter: grayscale(0) brightness(1)
+    drop-shadow(0 0 18px color-mix(in srgb, var(--accent) 45%, transparent));
+  transform: rotate(-9deg) scale(1.06);
+  opacity: 1;
+}
+
+.srow-head {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; gap: 10px;
+  min-height: 44px; padding-right: 118px;
+}
+.srow-head h3 {
+  font-family: var(--display); font-size: 17px; font-weight: 600; flex: 1;
+  display: flex; align-items: center; gap: 8px;
+}
+.crown {
+  width: 22px; height: 16px; fill: var(--dust);
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--dust) 70%, transparent));
+}
 .srow-count {
   font-family: var(--display); font-size: 13px; font-weight: 700;
   font-variant-numeric: tabular-nums; color: var(--slate);
@@ -106,64 +135,74 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .srow-count.done { color: var(--dust); }
 
 .vstrip {
+  position: relative; z-index: 1;
   display: flex; gap: 8px; overflow-x: auto;
   padding: 10px 2px 4px; scrollbar-width: none;
 }
 .vstrip::-webkit-scrollbar { display: none; }
 
+/* Variant tiles: the background IS the variant label —
+   gold sheen, candy gummy, starfield galaxy, faceted gem, iridescent
+   holofoil, cube glow, quack yellow. Colour = owned; grey = not. */
 .vtile {
-  flex: none; width: 76px;
-  display: flex; flex-direction: column; align-items: center; gap: 5px;
-  padding: 8px 4px 7px; border-radius: 12px;
+  flex: none; width: 66px;
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 6px 4px; border-radius: 12px;
   border: 1px solid var(--line);
-  transition: transform 0.12s ease, border-color 0.2s ease, background 0.2s ease;
 }
-.vtile:active { transform: scale(0.95); }
+.vtile::before {
+  content: ""; position: absolute; inset: 0; z-index: 0;
+  background: var(--vbg);
+  transition: filter 0.3s ease;
+}
+.vtile.vv-normal   { --vbg: linear-gradient(150deg, #303a4e, #171c28 70%); }
+.vtile.vv-gold     { --vbg: linear-gradient(150deg, #f6e09a, #d4a93f 45%, #7c5f1c); }
+.vtile.vv-gummy    { --vbg: linear-gradient(150deg, #ffb3e0, #f75fae 55%, #a52c6d); }
+.vtile.vv-galaxy   {
+  --vbg:
+    radial-gradient(circle at 18% 22%, rgba(255,255,255,0.95) 0 1px, transparent 2.5px),
+    radial-gradient(circle at 68% 14%, rgba(255,255,255,0.8) 0 1px, transparent 2px),
+    radial-gradient(circle at 44% 58%, rgba(255,255,255,0.9) 0 1.2px, transparent 2.5px),
+    radial-gradient(circle at 84% 72%, rgba(255,255,255,0.75) 0 1px, transparent 2px),
+    radial-gradient(circle at 26% 84%, rgba(255,255,255,0.65) 0 0.8px, transparent 1.8px),
+    radial-gradient(circle at 60% 40%, #6d4bd8 0%, transparent 60%),
+    linear-gradient(150deg, #43307e, #241a49 60%, #120d2b);
+}
+.vtile.vv-gem      { --vbg: conic-gradient(from 210deg at 55% 38%, #b8ecff, #3fa9e0 22%, #8fd4f5 38%, #2a6fa8 58%, #b8ecff 76%, #4db4e8); }
+.vtile.vv-holofoil { --vbg: conic-gradient(from 140deg at 50% 50%, #ffd9e8, #d9fff3 25%, #d9e8ff 50%, #fff3d9 75%, #ffd9e8); }
+.vtile.vv-cube     { --vbg: linear-gradient(150deg, #8a3df0, #4a1e8e 55%, #1c0b38), radial-gradient(circle at 50% 60%, #c26bff 0%, transparent 70%); }
+.vtile.vv-quack    { --vbg: linear-gradient(150deg, #ffe08a, #ffb347 55%, #d97e1f); }
 
-.vtile-img { position: relative; width: 58px; height: 58px; }
+.vtile-img { position: relative; z-index: 1; width: 54px; height: 54px; }
 .vtile-img img { width: 100%; height: 100%; object-fit: contain; }
 
-/* Owned: full colour on a lifted card with the sprite's accent ring */
+/* Owned: full-colour variant background + the sprite's accent ring */
 .vtile.owned {
-  background: var(--ridge-hi);
   border-color: color-mix(in srgb, var(--accent) 65%, var(--line));
   box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
-/* Missing: greyed out and locked on a sunken dark card */
-.vtile.missing { background: var(--obsidian); }
-.vtile.missing .vtile-img img { filter: grayscale(1) brightness(0.45); }
+/* Missing: everything desaturated, lock badge stays legible */
+.vtile.missing::before { filter: grayscale(1) brightness(0.4); }
+.vtile.missing .vtile-img img { filter: grayscale(1) brightness(0.5); }
 .vlock {
-  position: absolute; right: -2px; bottom: -2px;
+  position: absolute; right: -2px; bottom: -2px; z-index: 2;
   font-size: 13px; line-height: 1;
   filter: grayscale(1) brightness(1.6);
 }
 
 /* Pending: the redeem quest exists but isn't claimed yet */
-.vtile.pending { background: var(--obsidian); }
-.vtile.pending .vtile-img img { filter: grayscale(0.7) brightness(0.6); }
+.vtile.pending::before { filter: grayscale(0.65) brightness(0.55); }
+.vtile.pending .vtile-img img { filter: grayscale(0.7) brightness(0.65); }
 .vpending {
-  position: absolute; right: 0; bottom: 0;
+  position: absolute; right: 0; bottom: 0; z-index: 2;
   width: 10px; height: 10px; border-radius: 50%;
   background: var(--dust);
   box-shadow: 0 0 6px var(--dust);
   animation: pulse 1.8s ease-in-out infinite;
 }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
-
-.vlabel {
-  font-family: var(--display); font-size: 9px; font-weight: 700;
-  letter-spacing: 0.1em; text-transform: uppercase; color: var(--slate);
-}
-.vtile.owned .vlabel { color: var(--ink); }
-.v-gold { color: var(--dust); }
-.vtile.owned .v-gold { color: var(--dust); }
-.vtile.owned .v-gummy { color: #ff8ad2; }
-.vtile.owned .v-galaxy { color: var(--mythic); }
-.vtile.owned .v-gem { color: var(--water); }
-.vtile.owned .v-holofoil { color: #9be8d8; }
-.vtile.owned .v-cube { color: var(--mythic); }
-.vtile.owned .v-quack { color: var(--dust); }
 
 .dustbar span.part {
   background: linear-gradient(90deg, var(--dust-dim), var(--line));
@@ -181,6 +220,41 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   word-break: break-all;
 }
 .raw b { color: var(--ink); font-weight: 600; }
+
+/* ---------- Share panel ---------- */
+.share { padding: 14px 0 6px; }
+.share-toggle { width: 100%; text-align: center; }
+.share-body {
+  margin-top: 10px;
+  background: var(--ridge); border: 1px solid var(--line);
+  border-radius: 14px; padding: 14px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.share-actions { display: flex; flex-direction: column; gap: 8px; }
+.share-actions .btn-step { margin-top: 0; text-align: center; }
+.share-compare label { font-size: 12px; color: var(--slate); display: block; margin-bottom: 6px; }
+.share-compare-row { display: flex; gap: 8px; }
+.share-compare-row input {
+  flex: 1; min-width: 0; padding: 11px 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--obsidian);
+  color: var(--ink); font-size: 13px;
+}
+.share-compare-row .btn-step { margin-top: 0; flex: none; }
+.share-compare-row .btn-step:disabled { opacity: 0.5; }
+
+.compare-result .section-label { padding-top: 10px; }
+.mini-tiles { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 0; }
+.mini-tile {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--ridge-hi); border: 1px solid var(--line);
+  border-radius: 9px; padding: 4px 8px 4px 4px;
+}
+.mini-tile img { width: 34px; height: 34px; object-fit: contain; }
+.mini-tile em {
+  font-style: normal; font-family: var(--display);
+  font-size: 10px; font-weight: 600; line-height: 1.25; color: var(--ink);
+}
+.mini-empty { font-size: 12px; color: var(--slate); padding: 6px 0; }
 
 .syncbar {
   position: sticky; bottom: 0; z-index: 10;

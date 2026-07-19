@@ -46,6 +46,7 @@ const SPRITE_ITEMS = {
   "item-6": redeemQuest("water_gem", "Active"),
   "item-7": redeemQuest("sleepy_gold", "Claimed"), // alias → Dream
   "item-8": redeemQuest("drifter", "Claimed"), // alias → Aura
+  "item-8b": redeemQuest("crispynut", "Claimed"), // 1/1 → mastered crown
   "item-9": redeemQuest("wanderer_gold", "Claimed"), // unmapped on purpose
   "item-10": {
     templateId: "Token:athena_s41_spritemastery_token_q01",

@@ -3,15 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   SPRITES,
+  SLUG_LOOKUP,
+  ALL_KEYS,
   TOTAL_VARIANTS,
   spriteVariants,
   spriteImage,
 } from "../lib/catalog.js";
-import {
-  buildCollection,
-  OWNED,
-  PENDING,
-} from "../lib/collection.js";
+import { buildCollection, OWNED, PENDING } from "../lib/collection.js";
+import { encodeCode, decodeCode, tradeDiff, ownedKeySet } from "../lib/share.js";
+import { renderShareImage, shareOrDownload } from "../lib/share-image.js";
 
 // Must match EPIC_CLIENT_ID in lib/epic.js — the auth code Epic issues here is
 // redeemed with that client's credentials. fortniteAndroidGameClient (Epic
@@ -71,6 +71,55 @@ function formatAgo(iso) {
   if (h < 48) return `${h}h ago`;
   return `${Math.round(h / 24)}d ago`;
 }
+
+const keyInfo = (key) => {
+  const [slug, variant] = key.split(":");
+  return { sprite: SLUG_LOOKUP[slug], variant };
+};
+
+// True while the element sits in the middle band of the viewport — drives
+// the hero image's black&white → colour reveal as rows scroll through.
+// A healthy IntersectionObserver always delivers an initial entry; if none
+// arrives (or IO is missing), fall back to permanently coloured rather than
+// leaving heroes grey forever.
+function useCenterFocus() {
+  const ref = useRef(null);
+  const [focus, setFocus] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setFocus(true);
+      return;
+    }
+    let fired = false;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        fired = true;
+        setFocus(entry.isIntersecting);
+      },
+      { rootMargin: "-35% 0px -35% 0px", threshold: 0 }
+    );
+    io.observe(el);
+    const fallback = setTimeout(() => {
+      if (!fired) {
+        io.disconnect();
+        setFocus(true);
+      }
+    }, 1500);
+    return () => {
+      clearTimeout(fallback);
+      io.disconnect();
+    };
+  }, []);
+  return [ref, focus];
+}
+
+const Crown = () => (
+  <svg className="crown" viewBox="0 0 24 17" role="img" aria-label="Mastered — all variants owned">
+    <path d="M2 14 L1 3.5 L7.2 7.8 L12 1 L16.8 7.8 L23 3.5 L22 14 Z" />
+    <rect x="3" y="15" width="18" height="2" rx="1" />
+  </svg>
+);
 
 /* ---------------- Login screen ---------------- */
 
@@ -205,14 +254,257 @@ function LoginScreen({ onSignedIn, toast }) {
   );
 }
 
+/* ---------------- Share panel ---------------- */
+
+function SharePanel({ collection, displayName, ownedTotal, toast }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(null); // "missing" | "owned" | null
+  const [friendCode, setFriendCode] = useState("");
+  const [friend, setFriend] = useState(null); // { name, owned: Set }
+  const [compareError, setCompareError] = useState(null);
+
+  const mine = useMemo(() => ownedKeySet(collection), [collection]);
+
+  // Warm the browser cache for every variant image as soon as the panel
+  // opens — image rendering is then near-instant, which keeps iOS Safari's
+  // share-sheet user-activation window from expiring mid-render.
+  useEffect(() => {
+    if (!open) return;
+    for (const k of ALL_KEYS) {
+      const { sprite, variant } = keyInfo(k);
+      if (!sprite) continue;
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = spriteImage(sprite, variant);
+    }
+  }, [open]);
+
+  async function makeImage(mode) {
+    setBusy(mode);
+    try {
+      const keys =
+        mode === "owned"
+          ? [...mine]
+          : ALL_KEYS.filter((k) => !mine.has(k));
+      if (keys.length === 0) {
+        toast(
+          mode === "owned"
+            ? "Nothing owned yet — sync first."
+            : "Nothing missing. Flex away."
+        );
+        return;
+      }
+      const blob = await renderShareImage({
+        title: mode === "owned" ? "Owned Sprites" : "Missing Sprites",
+        subtitle: `${displayName} · ${ownedTotal}/${TOTAL_VARIANTS} collected`,
+        keys,
+      });
+      const result = await shareOrDownload(
+        blob,
+        `fmds-${mode}-sprites.png`,
+        `${displayName}'s ${mode} Sprites`
+      );
+      if (result === "downloaded") toast("Image saved to your downloads.");
+    } catch (err) {
+      toast(`Couldn't make the image: ${err.message}`, true);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function copyCode() {
+    const code = encodeCode(collection, displayName);
+    try {
+      await navigator.clipboard.writeText(code);
+      toast("Collection code copied — send it to a friend.");
+    } catch {
+      // Clipboard can be blocked; show it for manual copy.
+      window.prompt("Copy your collection code:", code);
+    }
+  }
+
+  function runCompare() {
+    setCompareError(null);
+    setFriend(null);
+    try {
+      setFriend(decodeCode(friendCode));
+    } catch (err) {
+      setCompareError(err.message);
+    }
+  }
+
+  // Derived from current state so the diff never goes stale after a re-sync.
+  const compare = useMemo(
+    () => (friend ? { name: friend.name, ...tradeDiff(mine, friend.owned) } : null),
+    [friend, mine]
+  );
+
+  const renderKeys = (keys) =>
+    keys.length === 0 ? (
+      <div className="mini-empty">Nothing — all covered.</div>
+    ) : (
+      <div className="mini-tiles">
+        {keys.map((k) => {
+          const { sprite, variant } = keyInfo(k);
+          if (!sprite) return null;
+          return (
+            <span className="mini-tile" key={k} title={`${sprite.name} — ${variant}`}>
+              <img src={spriteImage(sprite, variant)} alt="" width={34} height={34} loading="lazy" />
+              <em>
+                {sprite.name}
+                <br />
+                {variant === "Normal" ? "Base" : variant}
+              </em>
+            </span>
+          );
+        })}
+      </div>
+    );
+
+  return (
+    <div className="share">
+      <button className="btn-step share-toggle" onClick={() => setOpen(!open)}>
+        {open ? "Close sharing" : "Share with friends"}
+      </button>
+
+      {open && (
+        <div className="share-body">
+          <div className="share-actions">
+            <button className="btn-step" disabled={!!busy} onClick={() => makeImage("missing")}>
+              {busy === "missing" ? "Rendering…" : "🖼 Missing-list image"}
+            </button>
+            <button className="btn-step" disabled={!!busy} onClick={() => makeImage("owned")}>
+              {busy === "owned" ? "Rendering…" : "🖼 Owned-list image"}
+            </button>
+            <button className="btn-step" onClick={copyCode}>
+              📋 Copy my collection code
+            </button>
+          </div>
+
+          <div className="share-compare">
+            <label htmlFor="friend-code">
+              Paste a friend's collection code to compare:
+            </label>
+            <div className="share-compare-row">
+              <input
+                id="friend-code"
+                value={friendCode}
+                onChange={(e) => {
+                  setFriendCode(e.target.value);
+                  setCompareError(null);
+                }}
+                placeholder="FMDS1.TheirName.xxxx"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button
+                className="btn-step"
+                disabled={!friendCode.trim()}
+                onClick={runCompare}
+              >
+                Compare
+              </button>
+            </div>
+            {compareError && (
+              <div className="alert" role="alert">{compareError}</div>
+            )}
+            {compare && (
+              <div className="compare-result">
+                <div className="section-label">
+                  You have · {compare.name} needs ({compare.youOffer.length})
+                </div>
+                {renderKeys(compare.youOffer)}
+                <div className="section-label">
+                  {compare.name} has · you need ({compare.theyOffer.length})
+                </div>
+                {renderKeys(compare.theyOffer)}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- Sprite row ---------------- */
+
+function SpriteRow({ sprite: s, tiles, stats, statusOf }) {
+  const [ref, focus] = useCenterFocus();
+  const complete = stats.owned === stats.total;
+  return (
+    <section
+      ref={ref}
+      className={`srow ${stats.owned > 0 ? "started" : "untouched"} ${
+        complete ? "mastered" : ""
+      } ${focus ? "infocus" : ""}`}
+      style={{ "--accent": `var(--${s.element})` }}
+    >
+      <img
+        className="srow-hero"
+        src={spriteImage(s)}
+        alt=""
+        aria-hidden="true"
+        loading="lazy"
+        width={132}
+        height={132}
+      />
+      <div className="srow-head">
+        <h3>
+          {s.name}
+          {complete && <Crown />}
+        </h3>
+        <span className={`srow-count ${complete ? "done" : ""}`}>
+          {stats.owned}/{stats.total}
+        </span>
+      </div>
+      <div className="vstrip">
+        {tiles.map((v) => {
+          const state = statusOf(s.slug, v);
+          return (
+            <div
+              key={v}
+              role="img"
+              className={`vtile ${state} vv-${v.toLowerCase()}`}
+              title={v === "Normal" ? "Base" : v}
+              aria-label={`${s.name} ${v}: ${
+                state === OWNED
+                  ? "owned"
+                  : state === PENDING
+                  ? "quest in progress"
+                  : "not owned"
+              }`}
+            >
+              <span className="vtile-img">
+                <img
+                  src={spriteImage(s, v)}
+                  alt=""
+                  loading="lazy"
+                  width={54}
+                  height={54}
+                />
+                {state === "missing" && (
+                  <span className="vlock" aria-hidden="true">
+                    🔒
+                  </span>
+                )}
+                {state === PENDING && (
+                  <span className="vpending" aria-hidden="true" />
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 /* ---------------- Ledger ---------------- */
 
 export default function Home() {
   const [auth, setAuth] = useState({ state: "loading" }); // loading | out | in
   const [collection, setCollection] = useState({ variants: {}, unmapped: [] });
-  // Manual fallback: tap a tile to override the synced state.
-  // { "slug:Variant": true(owned) | false(not owned) }
-  const [manual, setManual] = useState({});
   const [lastSync, setLastSync] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [filter, setFilter] = useState("all"); // all | owned | missing
@@ -227,12 +519,11 @@ export default function Home() {
   }, []);
 
   const hydrateFromCache = useCallback((accountId) => {
+    // Always overwrite state — resetting on a cache miss guarantees one
+    // account's data can never bleed into another after an account switch.
     const cached = loadStore(accountId);
-    if (cached) {
-      setCollection(cached.collection || { variants: {}, unmapped: [] });
-      setManual(cached.manual || {});
-      setLastSync(cached.lastSync || null);
-    }
+    setCollection(cached?.collection || { variants: {}, unmapped: [] });
+    setLastSync(cached?.lastSync || null);
     return cached;
   }, []);
 
@@ -245,19 +536,19 @@ export default function Home() {
         setCollection(next);
         setLastSync(data.syncedAt);
         if (data.empty) {
-          toast(
-            "Synced, but Epic returned no Sprite data yet — you can still track by tapping tiles.",
-            true
-          );
+          toast("Synced, but Epic returned no Sprite data yet.", true);
         } else if (!silent) {
-          const owned = Object.values(next.variants)
-            .flatMap((vs) => Object.values(vs))
-            .filter((s) => s === OWNED).length;
+          const owned = ownedKeySet(next).size;
           toast(`Synced — ${owned} of ${TOTAL_VARIANTS} Sprites owned`);
         }
       } catch (err) {
         if (err.status === 401) {
+          // Full sign-out reset — leaving the old collection in state would
+          // let a different account's next sign-in inherit (and persist) it.
           setAuth({ state: "out" });
+          setCollection({ variants: {}, unmapped: [] });
+          setLastSync(null);
+          bootSynced.current = false;
           toast(err.message === "signed_out" ? "Please sign in." : err.message, true);
         } else {
           toast(err.message, true);
@@ -289,36 +580,19 @@ export default function Home() {
     })();
   }, [hydrateFromCache, sync]);
 
-  // Persist collection + manual edits per account.
+  // Persist per account.
   useEffect(() => {
     if (auth.state !== "in") return;
-    saveStore(auth.accountId, { collection, manual, lastSync });
-  }, [collection, manual, lastSync, auth]);
+    saveStore(auth.accountId, { collection, lastSync });
+  }, [collection, lastSync, auth]);
 
-  // Effective state of one variant tile, manual override included.
   const statusOf = useCallback(
     (slug, variant) => {
-      const key = `${slug}:${variant}`;
-      if (key in manual) return manual[key] ? OWNED : "missing";
       const s = collection.variants[slug]?.[variant];
       return s === OWNED ? OWNED : s === PENDING ? PENDING : "missing";
     },
-    [collection, manual]
+    [collection]
   );
-
-  function tapTile(slug, variant) {
-    const key = `${slug}:${variant}`;
-    const synced = collection.variants[slug]?.[variant] === OWNED;
-    setManual((prev) => {
-      const next = { ...prev };
-      const cur = key in next ? next[key] : synced;
-      const flipped = !cur;
-      // Drop the override when it matches what sync says anyway.
-      if (flipped === synced) delete next[key];
-      else next[key] = flipped;
-      return next;
-    });
-  }
 
   async function signOut() {
     try {
@@ -326,13 +600,11 @@ export default function Home() {
     } catch {}
     setAuth({ state: "out" });
     setCollection({ variants: {}, unmapped: [] });
-    setManual({});
     setLastSync(null);
     bootSynced.current = false;
     toast("Signed out — your Epic access was revoked.");
   }
 
-  // Per-sprite owned counts (manual included) drive everything below.
   const spriteStats = useMemo(() => {
     const stats = {};
     for (const s of SPRITES) {
@@ -348,15 +620,21 @@ export default function Home() {
     [spriteStats]
   );
 
+  // Tile-level filtering: "Owned" shows only owned tiles, "Missing" only
+  // tiles you don't own yet (incl. in-progress). Rows with no matching
+  // tiles disappear.
   const visible = useMemo(
     () =>
-      SPRITES.filter((s) => {
-        const st = spriteStats[s.slug];
-        if (filter === "owned") return st.owned > 0;
-        if (filter === "missing") return st.owned < st.total;
-        return true;
-      }),
-    [filter, spriteStats]
+      SPRITES.map((s) => {
+        const tiles = spriteVariants(s).filter((v) => {
+          const st = statusOf(s.slug, v);
+          if (filter === "owned") return st === OWNED;
+          if (filter === "missing") return st !== OWNED;
+          return true;
+        });
+        return { sprite: s, tiles };
+      }).filter((row) => row.tiles.length > 0),
+    [filter, statusOf]
   );
 
   /* ---------- render ---------- */
@@ -438,78 +716,21 @@ export default function Home() {
             <div className="empty">
               {filter === "missing" && ownedTotal === TOTAL_VARIANTS
                 ? "Full collection. Go touch grass, Guardian."
+                : filter === "owned"
+                ? "Nothing owned yet — hit Refresh from Epic below."
                 : "Nothing matches this filter."}
             </div>
           ) : (
             <div className="rows">
-              {visible.map((s) => {
-                const st = spriteStats[s.slug];
-                const complete = st.owned === st.total;
-                return (
-                  <section
-                    key={s.slug}
-                    className={`srow ${st.owned > 0 ? "started" : "untouched"}`}
-                    style={{ "--accent": `var(--${s.element})` }}
-                  >
-                    <div className="srow-head">
-                      <img
-                        className="srow-icon"
-                        src={spriteImage(s)}
-                        alt=""
-                        loading="lazy"
-                        width={44}
-                        height={44}
-                      />
-                      <h3>{s.name}</h3>
-                      <span className={`srow-count ${complete ? "done" : ""}`}>
-                        {complete ? "✓ " : ""}
-                        {st.owned}/{st.total}
-                      </span>
-                    </div>
-                    <div className="vstrip">
-                      {spriteVariants(s).map((v) => {
-                        const state = statusOf(s.slug, v);
-                        return (
-                          <button
-                            key={v}
-                            className={`vtile ${state}`}
-                            onClick={() => tapTile(s.slug, v)}
-                            aria-pressed={state === OWNED}
-                            aria-label={`${s.name} ${v}: ${
-                              state === OWNED
-                                ? "owned"
-                                : state === PENDING
-                                ? "quest in progress"
-                                : "not owned"
-                            }. Tap to toggle manually.`}
-                          >
-                            <span className="vtile-img">
-                              <img
-                                src={spriteImage(s, v)}
-                                alt=""
-                                loading="lazy"
-                                width={58}
-                                height={58}
-                              />
-                              {state === "missing" && (
-                                <span className="vlock" aria-hidden="true">
-                                  🔒
-                                </span>
-                              )}
-                              {state === PENDING && (
-                                <span className="vpending" aria-hidden="true" />
-                              )}
-                            </span>
-                            <span className={`vlabel v-${v.toLowerCase()}`}>
-                              {v === "Normal" ? "Base" : v}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-                );
-              })}
+              {visible.map(({ sprite: s, tiles }) => (
+                <SpriteRow
+                  key={s.slug}
+                  sprite={s}
+                  tiles={tiles}
+                  stats={spriteStats[s.slug]}
+                  statusOf={statusOf}
+                />
+              ))}
             </div>
           )}
 
@@ -520,13 +741,20 @@ export default function Home() {
                 <div className="raw" key={`${u.templateId}-${i}`}>
                   <b>{u.templateId}</b>
                   <div>
-                    {u.state ? `quest ${u.state} · ` : ""}
+                    {u.state ? `${u.state} · ` : ""}
                     {u.via}
                   </div>
                 </div>
               ))}
             </>
           )}
+
+          <SharePanel
+            collection={collection}
+            displayName={auth.displayName}
+            ownedTotal={ownedTotal}
+            toast={toast}
+          />
 
           <div className="syncbar">
             <button
