@@ -17,6 +17,36 @@ export const dynamic = "force-dynamic";
 // or collections (collection-book progress) — scan both and merge.
 const PROFILE_IDS = ["athena", "collections"];
 
+// Compact recon of a raw QueryProfile response: how sprite/mastery data is
+// shaped in each profile, so we can find things the main extractor misses
+// (per-variant mastery LEVEL isn't in the athena tokens — all read level 1 —
+// and brand-new sprites may live under different templateIds). Surfaced in
+// the sync report, not used for display.
+function profileDebug(data) {
+  const prof = data?.profileChanges?.[0]?.profile;
+  if (!prof) return null;
+  const items = Object.values(prof.items || {});
+  const rx = /sprite|coldtrophy|mastery/i;
+  const sprite = items
+    .filter((i) => rx.test(i.templateId || ""))
+    .map((i) => ({
+      t: i.templateId,
+      q: i.quantity,
+      l: i.attributes?.level,
+      ak: Object.keys(i.attributes || {}).filter((k) => k !== "level"),
+    }));
+  return {
+    itemCount: items.length,
+    statAttrKeys: Object.keys(prof.stats?.attributes || {}),
+    spriteItemCount: sprite.length,
+    // Any sprite item whose level or quantity is above 1 — the mastery signal
+    // we're hunting for, if it exists anywhere.
+    leveled: sprite.filter((s) => (s.l && s.l > 1) || (s.q && s.q > 1)),
+    // Distinct attribute-key sets seen on sprite items (dedup by join).
+    attrShapes: [...new Set(sprite.map((s) => s.ak.sort().join(",")).filter(Boolean))],
+  };
+}
+
 export async function POST() {
   const session = openSession((await cookies()).get(SESSION_COOKIE)?.value);
   if (!session) {
@@ -28,10 +58,15 @@ export async function POST() {
 
     const results = [];
     const profileErrors = [];
+    const debug = {};
     for (const profileId of PROFILE_IDS) {
       const res = await queryProfile(token.access_token, session.a, profileId);
-      if (res.ok) results.push(extractSpriteData(res.data, profileId));
-      else profileErrors.push({ profileId, status: res.status, error: res.error });
+      if (res.ok) {
+        results.push(extractSpriteData(res.data, profileId));
+        debug[profileId] = profileDebug(res.data);
+      } else {
+        profileErrors.push({ profileId, status: res.status, error: res.error });
+      }
     }
 
     const items = results.flatMap((r) => r.items);
@@ -43,6 +78,7 @@ export async function POST() {
       items,
       attributes,
       profileErrors,
+      debug,
       empty: items.length === 0 && attributes.length === 0,
     });
   } catch (err) {

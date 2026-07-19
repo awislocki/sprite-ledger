@@ -140,6 +140,7 @@ function LoginScreen({ onSignedIn, toast }) {
   const pollRef = useRef(null);
   const deadlineRef = useRef(0);
   const inFlightRef = useRef(false);
+  const pollOnceRef = useRef(null);
 
   // Manual auth-code flow
   const [paste, setPaste] = useState("");
@@ -150,8 +151,27 @@ function LoginScreen({ onSignedIn, toast }) {
   const stopPolling = useCallback(() => {
     clearInterval(pollRef.current);
     pollRef.current = null;
+    pollOnceRef.current = null;
+    inFlightRef.current = false;
   }, []);
   useEffect(() => stopPolling, [stopPolling]);
+
+  // iOS suspends timers in background tabs, so a poll may not fire while the
+  // user is confirming in the Epic tab. Poll immediately when they return —
+  // this is what made "doing it twice" unnecessary.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && pollOnceRef.current) {
+        pollOnceRef.current();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, []);
 
   async function startDevice() {
     setDeviceBusy(true);
@@ -161,7 +181,7 @@ function LoginScreen({ onSignedIn, toast }) {
       setDevice(d);
       deadlineRef.current = Date.now() + (d.expiresIn || 600) * 1000;
       stopPolling();
-      pollRef.current = setInterval(async () => {
+      const pollOnce = async () => {
         if (Date.now() > deadlineRef.current) {
           stopPolling();
           setDevice(null);
@@ -185,7 +205,9 @@ function LoginScreen({ onSignedIn, toast }) {
         } finally {
           inFlightRef.current = false;
         }
-      }, Math.max(2, d.interval || 5) * 1000);
+      };
+      pollOnceRef.current = pollOnce;
+      pollRef.current = setInterval(pollOnce, Math.max(2, d.interval || 5) * 1000);
     } catch (err) {
       setDeviceError(err.message);
     } finally {
@@ -741,6 +763,7 @@ export default function Home() {
           syncedAt: data.syncedAt,
           profileErrors: data.profileErrors || [],
           attributes: data.attributes || [],
+          debug: data.debug || null,
           items: (data.items || []).map(slimItem),
         });
         setLastSync(data.syncedAt);
@@ -859,7 +882,11 @@ export default function Home() {
           return true;
         });
         return { sprite: s, tiles };
-      }).filter((row) => row.tiles.length > 0),
+      })
+        .filter((row) => row.tiles.length > 0)
+        // Alphabetical display order. (SPRITES/ALL_KEYS keep their catalog
+        // order so share codes stay stable — this sorts the view only.)
+        .sort((a, b) => a.sprite.name.localeCompare(b.sprite.name)),
     [filter, statusOf]
   );
 
