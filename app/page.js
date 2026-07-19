@@ -434,18 +434,23 @@ function SharePanel({ collection, displayName, ownedTotal, toast }) {
 
 /* ---------------- Sprite row ---------------- */
 
-function SpriteRow({ sprite: s, tiles, stats, level, statusOf }) {
+function SpriteRow({ sprite: s, tiles, stats, levels, caughtCount, statusOf }) {
   const [ref, focus] = useCenterFocus();
   const complete = stats.owned === stats.total;
-  const mastered = level >= MASTERY_LEVEL;
-  // Mastery progress proves the sprite is caught in-game even when no pod
-  // style is unlocked yet — those rows light up too.
-  const caught = stats.owned > 0 || level > 0;
+  // Owned variant creatures (tokens) prove the sprite is caught in-game
+  // even when no pod style is unlocked yet — those rows light up too.
+  const caught = stats.owned > 0 || caughtCount > 0;
+  // Row goes gold once every owned variant is levelled to the crown.
+  const allMastered =
+    stats.owned > 0 &&
+    tiles.every(
+      (v) => statusOf(s.slug, v) !== OWNED || (levels?.[v] || 0) >= MASTERY_LEVEL
+    );
   return (
     <section
       ref={ref}
       className={`srow ${caught ? "started" : "untouched"} ${
-        mastered ? "mastered" : ""
+        allMastered ? "mastered" : ""
       } ${focus ? "infocus" : ""}`}
       style={{ "--accent": `var(--${s.element})` }}
     >
@@ -459,32 +464,38 @@ function SpriteRow({ sprite: s, tiles, stats, level, statusOf }) {
         height={196}
       />
       <div className="srow-head">
-        <h3>
-          {s.name}
-          {mastered && <Crown />}
-        </h3>
+        <h3>{s.name}</h3>
         <span className={`srow-count ${complete ? "done" : ""}`}>
           {complete ? "✓ " : ""}
           {stats.owned}/{stats.total}
         </span>
-        {level > 0 && !mastered && (
-          <span className="lvl" aria-label={`Mastery level ${level}`}>
-            L{level}
+        {stats.owned === 0 && caughtCount > 0 && (
+          <span
+            className="lvl"
+            aria-label={`${caughtCount} variant${caughtCount > 1 ? "s" : ""} caught in-game; pod styles not unlocked yet`}
+          >
+            caught ×{caughtCount}
           </span>
         )}
       </div>
       <div className="vstrip">
         {tiles.map((v) => {
           const state = statusOf(s.slug, v);
+          const lvl = levels?.[v] || 0;
+          const crowned = state === OWNED && lvl >= MASTERY_LEVEL;
           return (
             <div
               key={v}
               role="img"
-              className={`vtile ${state} vv-${v.toLowerCase()}`}
-              title={v === "Normal" ? "Base" : v}
+              className={`vtile ${state} vv-${v.toLowerCase()} ${
+                crowned ? "vmastered" : ""
+              }`}
+              title={`${v === "Normal" ? "Base" : v}${lvl ? ` · L${lvl}` : ""}`}
               aria-label={`${s.name} ${v}: ${
                 state === OWNED
-                  ? "owned"
+                  ? crowned
+                    ? `mastered, level ${lvl}`
+                    : `owned${lvl ? `, level ${lvl}` : ""}`
                   : state === PENDING
                   ? "quest in progress"
                   : "not owned"
@@ -506,6 +517,15 @@ function SpriteRow({ sprite: s, tiles, stats, level, statusOf }) {
                 {state === PENDING && (
                   <span className="vpending" aria-hidden="true" />
                 )}
+                {crowned ? (
+                  <span className="vcrown" aria-hidden="true">
+                    <Crown />
+                  </span>
+                ) : state === OWNED && lvl >= 2 ? (
+                  <span className="vlvl" aria-hidden="true">
+                    L{lvl}
+                  </span>
+                ) : null}
               </span>
             </div>
           );
@@ -776,7 +796,8 @@ export default function Home() {
                   sprite={s}
                   tiles={tiles}
                   stats={spriteStats[s.slug]}
-                  level={collection.mastery?.[s.slug] || 0}
+                  levels={collection.variantLevels?.[s.slug]}
+                  caughtCount={collection.caught?.[s.slug] || 0}
                   statusOf={statusOf}
                 />
               ))}

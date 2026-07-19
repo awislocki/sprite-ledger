@@ -125,41 +125,66 @@ export function fixtureItems() {
     }
   );
 
-  // Mastery progression: chain q01 = Water (seeded). noise-1 above is the
-  // Claimed mastery quest for step "", these tokens add steps a/c/e → L4.
-  for (const step of ["a", "c", "e"]) {
+  // Variant creatures: one token per owned variant, level on the token.
+  // Chain q01 = Water (seeded): four creatures, all level 1.
+  for (const step of ["", "a", "c", "e"]) {
     items.push({
-      itemId: `mastery-water-${step}`,
+      itemId: `token-water-${step || "base"}`,
       templateId: `Token:athena_s41_spritemastery_token_q01${step}`,
       quantity: 1,
       attributes: { level: 1 },
       profileId: "athena",
     });
   }
-  // Chain q03 = Fire: 4 tokens + 1 Claimed mastery quest = 5 steps → crown.
-  for (const step of ["", "a", "b", "c"]) {
+  // Chain q03 = Fire: chain-numbered redeem quests teach the step → variant
+  // mapping ("" = Base, b = Galaxy), and the q03b token at level 5 must
+  // surface as a crowned Fire Galaxy tile.
+  items.push(
+    {
+      itemId: "redeem-fire-base",
+      templateId: "Quest:quest_s41_spritemastery_redeem_p01_q03",
+      quantity: 1,
+      attributes: {
+        quest_state: "Claimed",
+        premium_rewards: {
+          rewards: [
+            {
+              templateId: "CosmeticVariantToken:vtid_backpack_coldtrophy_fire",
+              quantity: 1,
+            },
+          ],
+        },
+      },
+      profileId: "athena",
+    },
+    {
+      itemId: "redeem-fire-galaxy",
+      templateId: "Quest:quest_s41_spritemastery_redeem_p01_q03b",
+      quantity: 1,
+      attributes: {
+        quest_state: "Claimed",
+        premium_rewards: {
+          rewards: [
+            {
+              templateId:
+                "CosmeticVariantToken:vtid_backpack_coldtrophy_fire_galaxy",
+              quantity: 1,
+            },
+          ],
+        },
+      },
+      profileId: "athena",
+    }
+  );
+  for (const [step, level] of [["", 1], ["a", 1], ["b", 5], ["c", 1]]) {
     items.push({
-      itemId: `mastery-fire-${step || "base"}`,
+      itemId: `token-fire-${step || "base"}`,
       templateId: `Token:athena_s41_spritemastery_token_q03${step}`,
       quantity: 1,
-      attributes: { level: 1 },
+      attributes: { level },
       profileId: "athena",
     });
   }
-  items.push({
-    itemId: "mastery-fire-quest",
-    templateId: "Quest:quest_s41_spritemastery_p02_q03d",
-    quantity: 1,
-    attributes: {
-      quest_state: "Claimed",
-      premium_rewards: {
-        rewards: [
-          { templateId: "Token:athena_s41_spritemastery_token_q03d", quantity: 1 },
-        ],
-      },
-    },
-    profileId: "athena",
-  });
   // Seeded-by-elimination chains: q16 = Air (L1), q17 = Seven (L2) —
   // mirrors the real account, where these chains have progress but no
   // redeem quests exist yet.

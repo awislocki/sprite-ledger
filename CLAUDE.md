@@ -17,15 +17,15 @@ below is built from real account data, not guesses.
   dropped the tokens (made Seven look missing). Everything else (mastery
   quests rewarding `Token:...`, the Token items, ChallengeBundle/Schedule
   items, daily vending quests) is season plumbing — skipped silently.
-- **Mastery (UI):** crown = level 5. Levels are derived from the numbered
-  mastery quest chains: mastery quest ..._spritemastery_pXX_q05a and redeem
-  quest ..._redeem_pXX_q05 share a chain number, the redeem reward names
-  the sprite (qNN → slug mapping: CHAIN_SEED in lib/collection.js, extended
-  dynamically from the player's own redeem quests), and each Claimed
-  mastery step / owned token_qNN item counts one level. UNCALIBRATED
-  against in-game levels as of 2026-07-19 — verify with Adam's account
-  (step counts might be off-by-one vs displayed level); the "Copy sync
-  report" link in the UI exists for exactly this kind of recon.
+- **Mastery is per-VARIANT (confirmed by Adam):** each owned
+  Token:..._token_qNN<letter> item is one owned variant creature; chain
+  number qNN → sprite (CHAIN_SEED in lib/collection.js + learned from the
+  player's redeem quests), step letter → variant (learned from the redeem
+  quest with the same chain+letter, whose reward names the exact variant).
+  The token's `level` attribute is that variant's level — tile crown at 5,
+  tile "L{n}" chip from 2+. Sprites with tokens but no unlocked styles
+  (Seven/Air pre-release) show a "caught ×N" row badge. Duplicate tokens
+  per step are deduped.
 - **Share codes:** `FMDS1.<name>.<base64url>` = 2-byte FNV-1a checksum of
   ALL_KEYS order + 89-bit ownership bitmap (lib/share.js). Any catalog
   reorder/insert changes the checksum → old codes get a friendly

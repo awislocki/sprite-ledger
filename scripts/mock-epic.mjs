@@ -53,22 +53,47 @@ const SPRITE_ITEMS = {
     quantity: 1,
     attributes: { level: 1 },
   },
-  // Fire (chain q03) at 5 mastery steps → gold crown in the UI.
-  ...Object.fromEntries(
-    ["", "a", "b", "c", "d"].map((step, i) => [
-      `mastery-${i}`,
-      {
-        templateId: `Token:athena_s41_spritemastery_token_q03${step}`,
-        quantity: 1,
-        attributes: { level: 1 },
+  // Chain-numbered redeem quests teach step→variant (q03 = Fire, "" = Base,
+  // c = Gold); the level-5 base token then crowns the Fire Base tile.
+  "chain-1": {
+    templateId: "Quest:quest_s41_spritemastery_redeem_p01_q03",
+    quantity: 1,
+    attributes: {
+      quest_state: "Claimed",
+      premium_rewards: {
+        rewards: [
+          { templateId: "CosmeticVariantToken:vtid_backpack_coldtrophy_fire", quantity: 1 },
+        ],
       },
-    ])
-  ),
-  // Seven caught in-game (chain q17, L2) with zero pod styles unlocked,
+    },
+  },
+  "chain-2": {
+    templateId: "Quest:quest_s41_spritemastery_redeem_p01_q03c",
+    quantity: 1,
+    attributes: {
+      quest_state: "Claimed",
+      premium_rewards: {
+        rewards: [
+          { templateId: "CosmeticVariantToken:vtid_backpack_coldtrophy_fire_gold", quantity: 1 },
+        ],
+      },
+    },
+  },
+  "token-fire-base": {
+    templateId: "Token:athena_s41_spritemastery_token_q03",
+    quantity: 1,
+    attributes: { level: 5 },
+  },
+  "token-fire-gold": {
+    templateId: "Token:athena_s41_spritemastery_token_q03c",
+    quantity: 1,
+    attributes: { level: 2 },
+  },
+  // Seven caught in-game (two creatures) with zero pod styles unlocked,
   // plus an orphan chain (q22) for the "unreleased sprite" section.
   ...Object.fromEntries(
     ["q17", "q17c", "q22"].map((t) => [
-      `mastery-${t}`,
+      `token-${t}`,
       {
         templateId: `Token:athena_s41_spritemastery_token_${t}`,
         quantity: 1,

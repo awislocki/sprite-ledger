@@ -40,12 +40,15 @@ assert.equal(col.variants.seven.Gold, OWNED, "owned vtid token → Seven Gold");
 assert.equal(col.variants.seven.Normal, OWNED, "backpack style tag → Seven Base");
 assert.equal(col.variants.fire.Normal, OWNED, "backpack tag overlap, no dupe");
 
-// Mastery levels from quest-chain step counts
-assert.equal(col.mastery.water, 4, "water: q01 quest + 3 tokens = L4");
-assert.equal(col.mastery.fire, 5, "fire: 4 tokens + claimed step quest = L5 (crown)");
-assert.equal(col.mastery.air, 1, "seeded-by-elimination chain q16 → Air");
-assert.equal(col.mastery.seven, 2, "q17 seed and q19 dynamic mapping agree");
-assert.equal(col.mastery.grimreaper, undefined, "no mastery signal → no level");
+// Variant creatures: token count = caught, token level = variant level
+assert.equal(col.caught.water, 4, "four water creature tokens");
+assert.equal(col.caught.fire, 4, "four fire creature tokens");
+assert.equal(col.caught.air, 1, "seeded-by-elimination chain q16 → Air");
+assert.equal(col.caught.seven, 4, "q17 seed (2) + q19 learned from redeem (2)");
+assert.equal(col.caught.grimreaper, undefined, "no tokens → not caught");
+assert.equal(col.variantLevels.fire.Galaxy, 5, "L5 token → crowned Fire Galaxy");
+assert.equal(col.variantLevels.fire.Normal, 1, "step '' mapped to Base via redeem");
+assert.equal(col.variantLevels.water, undefined, "no step map (no chain redeems) → no levels");
 assert.deepEqual(col.unknownChains, { 22: 1 }, "orphan chain surfaces, not dropped");
 
 // Unknown slug surfaces instead of vanishing

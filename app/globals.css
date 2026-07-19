@@ -228,6 +228,23 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
+/* Per-variant mastery: crown at level 5, level chip from L2 up */
+.vcrown {
+  position: absolute; left: -3px; top: -4px; z-index: 2;
+}
+.vcrown .crown { width: 18px; height: 13px; }
+.vtile.vmastered {
+  border-color: color-mix(in srgb, var(--dust) 75%, var(--line));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--dust) 40%, transparent);
+}
+.vlvl {
+  position: absolute; left: -3px; top: -3px; z-index: 2;
+  font-family: var(--display); font-size: 9px; font-weight: 700;
+  color: var(--obsidian);
+  background: var(--dust);
+  border-radius: 5px; padding: 1px 4px;
+}
+
 .dustbar span.part {
   background: linear-gradient(90deg, var(--dust-dim), var(--line));
 }
