@@ -7,13 +7,25 @@ below is built from real account data, not guesses.
 
 ## Data model (decoded from a real sync, 2026-07-19)
 
-- **Ownership signal:** `spritemastery_redeem` quests in the `athena`
-  profile. Each one's `premium_rewards.rewards[0].templateId` is a
-  `CosmeticVariantToken:vtid_backpack_coldtrophy_<slug>[_<style>]`;
-  `quest_state: "Claimed"` = variant owned, `"Active"` = not yet (shown as
-  "pending"). Everything else (mastery quests rewarding `Token:...`, the
-  Token items, ChallengeBundle/Schedule items, daily vending quests) is
-  season plumbing — `lib/collection.js` skips it silently.
+- **Ownership signals** (lib/collection.js, strongest first): (1) owned
+  `CosmeticVariantToken:vtid_backpack_coldtrophy_<slug>[_<style>]` items —
+  granted per unlocked style regardless of how (quest, vending, later
+  phases); (2) the Mastery Pod backpack item's `attributes.variants[].owned`
+  style tags ("Mat13"/"Stage26", mapped via FILE_LOOKUP); (3)
+  `spritemastery_redeem` quests — `Claimed` = owned, `Active` = pending.
+  The server filter is /sprite|coldtrophy/i — /sprite/i alone silently
+  dropped the tokens (made Seven look missing). Everything else (mastery
+  quests rewarding `Token:...`, the Token items, ChallengeBundle/Schedule
+  items, daily vending quests) is season plumbing — skipped silently.
+- **Mastery (UI):** crown = every variant of that sprite owned. It is NOT
+  the in-game mastery-level track — that signal hasn't been decoded.
+- **Share codes:** `FMDS1.<name>.<base64url>` = 2-byte FNV-1a checksum of
+  ALL_KEYS order + 89-bit ownership bitmap (lib/share.js). Any catalog
+  reorder/insert changes the checksum → old codes get a friendly
+  "different version" error, never a silent mis-decode. ALL_KEYS order is
+  frozen by assertions in scripts/test-collection.mjs — update that
+  snapshot consciously.
+- **Next 15:** `cookies()` is async — all route handlers await it.
 - **Catalog & images:** `lib/catalog.js` is generated from the
   `Backpack_ColdTrophy` ("Sprite Mastery Pod") cosmetic on fortnite-api.com —
   18 sprites, 89 variants, one hosted image per combo (hotlinked; base URL in
