@@ -20,12 +20,15 @@ below is built from real account data, not guesses.
 - **Mastery is per-VARIANT (confirmed by Adam):** each owned
   Token:..._token_qNN<letter> item is one owned variant creature; chain
   number qNN → sprite (CHAIN_SEED in lib/collection.js + learned from the
-  player's redeem quests), step letter → variant (learned from the redeem
-  quest with the same chain+letter, whose reward names the exact variant).
-  The token's `level` attribute is that variant's level — tile crown at 5,
-  tile "L{n}" chip from 2+. Sprites with tokens but no unlocked styles
-  (Seven/Air pre-release) show a "caught ×N" row badge. Duplicate tokens
-  per step are deduped.
+  player's redeem quests), step letter → variant. Letters are GLOBAL
+  across sprites (verified on all 15 mapped chains: ""=Base a=Gummy
+  b=Galaxy c=Gold d=Gem e=Holofoil f=Cube; Quack unobserved) — that's how
+  caught variants get named on chains with no redeem quests yet
+  (Seven/Air); a redeem-learned mapping still wins. The token's `level`
+  attribute is the variant's level — tile crown at 5, "L{n}" chip from 2+.
+  Tile states: owned (style unlocked) > caught (creature only — dashed
+  accent ring, hollow ✓) > pending > missing. Undecodable tokens fall back
+  to a "+N caught" row badge. Duplicate tokens per step are deduped.
 - **Share codes:** `FMDS1.<name>.<base64url>` = 2-byte FNV-1a checksum of
   ALL_KEYS order + 89-bit ownership bitmap (lib/share.js). Any catalog
   reorder/insert changes the checksum → old codes get a friendly

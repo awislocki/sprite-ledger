@@ -218,6 +218,22 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   font-size: 10px; font-weight: 800; line-height: 1;
 }
 
+/* Caught: the creature is owned in-game but its pod style isn't unlocked —
+   full-colour art on a dashed accent ring with a hollow ✓ */
+.vtile.caught {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--accent) 75%, var(--line));
+}
+.vcaught {
+  position: absolute; right: -5px; bottom: -4px; z-index: 2;
+  width: 15px; height: 15px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--obsidian);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 85%, white);
+  color: color-mix(in srgb, var(--accent) 85%, white);
+  font-size: 9px; font-weight: 800; line-height: 1;
+}
+
 /* Missing: flat near-black, dashed outline, ghosted art + lock */
 .vtile.missing { border-style: dashed; border-color: #2c3550; }
 .vtile.missing::before { filter: grayscale(1) brightness(0.22); }

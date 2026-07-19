@@ -469,12 +469,12 @@ function SpriteRow({ sprite: s, tiles, stats, levels, caughtCount, statusOf }) {
           {complete ? "✓ " : ""}
           {stats.owned}/{stats.total}
         </span>
-        {stats.owned === 0 && caughtCount > 0 && (
+        {caughtCount > Object.keys(levels || {}).length && (
           <span
             className="lvl"
-            aria-label={`${caughtCount} variant${caughtCount > 1 ? "s" : ""} caught in-game; pod styles not unlocked yet`}
+            aria-label="caught variants that couldn't be identified yet"
           >
-            caught ×{caughtCount}
+            +{caughtCount - Object.keys(levels || {}).length} caught
           </span>
         )}
       </div>
@@ -482,7 +482,8 @@ function SpriteRow({ sprite: s, tiles, stats, levels, caughtCount, statusOf }) {
         {tiles.map((v) => {
           const state = statusOf(s.slug, v);
           const lvl = levels?.[v] || 0;
-          const crowned = state === OWNED && lvl >= MASTERY_LEVEL;
+          const crowned =
+            (state === OWNED || state === "caught") && lvl >= MASTERY_LEVEL;
           return (
             <div
               key={v}
@@ -496,6 +497,8 @@ function SpriteRow({ sprite: s, tiles, stats, levels, caughtCount, statusOf }) {
                   ? crowned
                     ? `mastered, level ${lvl}`
                     : `owned${lvl ? `, level ${lvl}` : ""}`
+                  : state === "caught"
+                  ? `caught in-game, level ${lvl} — pod style not unlocked yet`
                   : state === PENDING
                   ? "quest in progress"
                   : "not owned"
@@ -517,11 +520,16 @@ function SpriteRow({ sprite: s, tiles, stats, levels, caughtCount, statusOf }) {
                 {state === PENDING && (
                   <span className="vpending" aria-hidden="true" />
                 )}
+                {state === "caught" && (
+                  <span className="vcaught" aria-hidden="true">
+                    ✓
+                  </span>
+                )}
                 {crowned ? (
                   <span className="vcrown" aria-hidden="true">
                     <Crown />
                   </span>
-                ) : state === OWNED && lvl >= 2 ? (
+                ) : (state === OWNED || state === "caught") && lvl >= 2 ? (
                   <span className="vlvl" aria-hidden="true">
                     L{lvl}
                   </span>
@@ -657,7 +665,10 @@ export default function Home() {
   const statusOf = useCallback(
     (slug, variant) => {
       const s = collection.variants[slug]?.[variant];
-      return s === OWNED ? OWNED : s === PENDING ? PENDING : "missing";
+      if (s === OWNED) return OWNED;
+      // Creature token exists but the pod style isn't unlocked yet.
+      if (collection.variantLevels?.[slug]?.[variant]) return "caught";
+      return s === PENDING ? PENDING : "missing";
     },
     [collection]
   );

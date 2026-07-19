@@ -48,7 +48,16 @@ assert.equal(col.caught.seven, 4, "q17 seed (2) + q19 learned from redeem (2)");
 assert.equal(col.caught.grimreaper, undefined, "no tokens → not caught");
 assert.equal(col.variantLevels.fire.Galaxy, 5, "L5 token → crowned Fire Galaxy");
 assert.equal(col.variantLevels.fire.Normal, 1, "step '' mapped to Base via redeem");
-assert.equal(col.variantLevels.water, undefined, "no step map (no chain redeems) → no levels");
+// Global step-letter table names variants on chains with no redeem quests
+assert.equal(col.variantLevels.water.Holofoil, 1, "letter e → Holofoil, no redeem needed");
+assert.equal(col.variantLevels.seven.Normal, 1, "Seven base creature identified");
+assert.equal(col.variantLevels.seven.Gold, 1, "q17c → Seven Gold identified");
+assert.equal(col.variantLevels.air.Normal, 1, "q16 → Air base identified");
+assert.equal(
+  col.variantLevels.grimreaper,
+  undefined,
+  "no tokens → nothing invented"
+);
 assert.deepEqual(col.unknownChains, { 22: 1 }, "orphan chain surfaces, not dropped");
 
 // Unknown slug surfaces instead of vanishing
