@@ -15,7 +15,6 @@ import {
   expandSlimItems,
   OWNED,
   PENDING,
-  MASTERY_LEVEL,
 } from "../lib/collection.js";
 import { encodeCode, decodeCode, tradeDiff, ownedKeySet } from "../lib/share.js";
 import { renderShareImage, shareOrDownload } from "../lib/share-image.js";
@@ -608,12 +607,9 @@ function SpriteRow({ sprite: s, tiles, stats, levels, caughtCount, statusOf }) {
   // Owned variant creatures (tokens) prove the sprite is caught in-game
   // even when no pod style is unlocked yet — those rows light up too.
   const caught = stats.owned > 0 || caughtCount > 0;
-  // Row goes gold once every owned variant is levelled to the crown.
-  const allMastered =
-    stats.owned > 0 &&
-    tiles.every(
-      (v) => statusOf(s.slug, v) !== OWNED || (levels?.[v] || 0) >= MASTERY_LEVEL
-    );
+  // stats.owned counts the backbling-present (mastered) styles, so a row
+  // whose owned styles equal its total is fully mastered → gold trim.
+  const allMastered = stats.owned > 0 && stats.owned === stats.total;
   return (
     <section
       ref={ref}
@@ -649,9 +645,10 @@ function SpriteRow({ sprite: s, tiles, stats, levels, caughtCount, statusOf }) {
       <div className="vstrip">
         {tiles.map((v) => {
           const state = statusOf(s.slug, v);
-          const lvl = levels?.[v] || 0;
-          const crowned =
-            (state === OWNED || state === "caught") && lvl >= MASTERY_LEVEL;
+          // A variant's pod backbling only unlocks once that variant is
+          // MASTERED — so an owned (backbling-present) style IS a mastered
+          // one. (Level isn't in the feed, so we can't rank below 5.)
+          const crowned = state === OWNED;
           return (
             <div
               key={v}
@@ -659,14 +656,12 @@ function SpriteRow({ sprite: s, tiles, stats, levels, caughtCount, statusOf }) {
               className={`vtile ${state} vv-${v.toLowerCase()} ${
                 crowned ? "vmastered" : ""
               }`}
-              title={`${v === "Normal" ? "Base" : v}${lvl ? ` · L${lvl}` : ""}`}
+              title={`${v === "Normal" ? "Base" : v}${crowned ? " · mastered" : ""}`}
               aria-label={`${s.name} ${v}: ${
                 state === OWNED
-                  ? crowned
-                    ? `mastered, level ${lvl}`
-                    : `owned${lvl ? `, level ${lvl}` : ""}`
+                  ? "mastered — pod style unlocked"
                   : state === "caught"
-                  ? `caught in-game, level ${lvl} — pod style not unlocked yet`
+                  ? "caught in-game — not mastered yet"
                   : state === PENDING
                   ? "quest in progress"
                   : "not owned"
@@ -693,15 +688,11 @@ function SpriteRow({ sprite: s, tiles, stats, levels, caughtCount, statusOf }) {
                     ✓
                   </span>
                 )}
-                {crowned ? (
+                {crowned && (
                   <span className="vcrown" aria-hidden="true">
                     <Crown />
                   </span>
-                ) : (state === OWNED || state === "caught") && lvl >= 2 ? (
-                  <span className="vlvl" aria-hidden="true">
-                    L{lvl}
-                  </span>
-                ) : null}
+                )}
               </span>
             </div>
           );
