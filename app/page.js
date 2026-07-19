@@ -101,12 +101,13 @@ function LoginScreen({ onSignedIn, toast }) {
   return (
     <div className="login">
       <div className="login-hero">
-        <div className="orb-cluster" aria-hidden="true">
-          <span style={{ "--accent": "var(--fire)" }} />
-          <span style={{ "--accent": "var(--water)" }} />
-          <span style={{ "--accent": "var(--earth)" }} />
-        </div>
-        <h1>Sprite Ledger</h1>
+        <img
+          className="login-logo"
+          src="/logo.png"
+          alt="FMDS — Fortnite Sprite Tracker"
+          width={1131}
+          height={439}
+        />
         <p>
           Your Fortnite Sprite collection, synced from your Epic account — see
           what you still need before you drop.
@@ -393,7 +394,10 @@ export default function Home() {
         <>
           <header className="hud">
             <div className="acct">
-              <span className="hud-eyebrow">Sprite Ledger</span>
+              <span className="hud-eyebrow">
+                <img src="/mascot.png" alt="" width={22} height={22} />
+                FMDS Sprite Tracker
+              </span>
               <button className="acct-name" onClick={signOut}>
                 {auth.displayName} · Sign out
               </button>

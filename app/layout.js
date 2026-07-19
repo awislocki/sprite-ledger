@@ -1,7 +1,7 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Sprite Ledger",
+  title: "FMDS — Fortnite Sprite Tracker",
   description: "Your Fortnite Sprite collection — synced, tracked, extracted.",
 };
 

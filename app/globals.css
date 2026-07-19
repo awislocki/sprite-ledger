@@ -41,11 +41,13 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   padding: 14px 0 10px;
 }
 .hud-eyebrow {
+  display: inline-flex; align-items: center; gap: 7px;
   font-family: var(--display);
   font-size: 11px; font-weight: 600;
   letter-spacing: 0.22em; text-transform: uppercase;
   color: var(--dust);
 }
+.hud-eyebrow img { width: 22px; height: 22px; }
 .hud-count {
   font-family: var(--display);
   font-size: 34px; font-weight: 700; line-height: 1.1;
@@ -222,10 +224,10 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 
 /* ---------- Login screen ---------- */
 .login { padding: 26px 0 30px; }
-.login-hero { text-align: center; padding: 18px 0 24px; }
-.login-hero h1 {
-  font-family: var(--display); font-size: 32px; font-weight: 700;
-  letter-spacing: 0.02em; margin-top: 14px;
+.login-hero { text-align: center; padding: 8px 0 24px; }
+.login-logo {
+  width: 100%; max-width: 430px; height: auto;
+  filter: drop-shadow(0 6px 24px rgba(0, 0, 0, 0.5));
 }
 .login-hero p { color: var(--slate); font-size: 14px; line-height: 1.6; margin-top: 8px; }
 
