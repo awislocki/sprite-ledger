@@ -1,60 +1,82 @@
 # Sprite Ledger — Claude Code handoff
 
 Mobile-first Fortnite Sprite collection tracker with real Epic sign-in.
-Built and tested in a Claude.ai session (July 2026); this file carries the
-context forward.
+Live at https://sprite-ledger.vercel.app (Vercel project `sprite-ledger`,
+auto-deploys from main). First live sync completed 2026-07-19; the catalog
+below is built from real account data, not guesses.
 
-## Immediate tasks (in order)
+## Data model (decoded from a real sync, 2026-07-19)
 
-1. **Push:** `git push -u origin main` — remote `origin` is already wired to
-   https://github.com/awislocki/sprite-ledger.git and this commit is staged.
-2. **Deploy:** Import the repo in Vercel. REQUIRED env var:
-   `SESSION_SECRET` = output of `openssl rand -hex 32`. The login route
-   fail-fasts with instructions if it's missing (deliberate — never burn a
-   user's single-use Epic code on a misconfigured server).
-3. **First live sync (Adam does this on his phone):** sign in at the deployed
-   URL, sync, and inspect what comes back.
-4. **Catalog recon:** Sprite storage in Epic's profile JSON is undocumented.
-   The sync scans `athena` + `collections` profiles for templateIds matching
-   /sprite/i. Whatever real templateIds appear under "New from Epic — not in
-   catalog yet", add `match` keywords for them in `lib/catalog.js`. If the
-   sync returns nothing, check `profileErrors` in the /api/sync response and
-   extend `PROFILE_IDS` in `app/api/sync/route.js` with other candidate
-   profile ids.
+- **Ownership signal:** `spritemastery_redeem` quests in the `athena`
+  profile. Each one's `premium_rewards.rewards[0].templateId` is a
+  `CosmeticVariantToken:vtid_backpack_coldtrophy_<slug>[_<style>]`;
+  `quest_state: "Claimed"` = variant owned, `"Active"` = not yet (shown as
+  "pending"). Everything else (mastery quests rewarding `Token:...`, the
+  Token items, ChallengeBundle/Schedule items, daily vending quests) is
+  season plumbing — `lib/collection.js` skips it silently.
+- **Catalog & images:** `lib/catalog.js` is generated from the
+  `Backpack_ColdTrophy` ("Sprite Mastery Pod") cosmetic on fortnite-api.com —
+  18 sprites, 89 variants, one hosted image per combo (hotlinked; base URL in
+  `IMG_BASE`). Style sets differ per sprite (Earth has Cube not Holofoil,
+  Zero Point has Quack, The Burnt Peanut is base-only) — the catalog is the
+  authority, don't assume 6 uniform styles.
+- **Slug aliases:** Epic's internal slugs differ from display names:
+  sleepy→Dream, soccer→Striker, reddemon→Demon, crispynut→TheBurntPeanut,
+  drifter→Aura (verified by matching style fingerprints). Air and Seven
+  haven't appeared in sync data yet — their aliases are guesses; unknown
+  slugs surface in the UI's "New from Epic" section, so nothing is lost.
 
 ## Architecture (the parts that aren't obvious)
 
 - **Auth:** Epic's official OAuth can't read Fortnite game data, so sign-in is
   the community auth-code flow: user pastes a one-time code from
-  epicgames.com/id/api/redirect (fortniteIOSGameClient), server exchanges it,
-  mints a per-account device auth, and seals it AES-256-GCM into an httpOnly
-  cookie (`lib/session.js`). No database; server stores nothing at rest.
-  Console players are covered because Epic's web login offers
-  PlayStation/Xbox/Nintendo sign-in.
-- **Sign-out** revokes the device auth at Epic (best-effort) and clears the
-  cookie.
-- **Client** (`app/page.js`): auth state machine, cache-first render from
-  per-account localStorage, background sync on load, toasts for every error
-  path. Cards are tap-to-edit as a manual fallback.
+  epicgames.com/id/api/redirect, server exchanges it, mints a per-account
+  device auth, and seals it AES-256-GCM into an httpOnly cookie
+  (`lib/session.js`). No database; server stores nothing at rest. Console
+  players are covered because Epic's web login offers PS/Xbox/Nintendo.
+- **OAuth client:** fortniteAndroidGameClient — Epic DISABLED the old
+  fortniteIOSGameClient in 2026 (token endpoint returns
+  `errors.com.epicgames.account.client_disabled`). Client id/secret are
+  env-overridable (`EPIC_CLIENT_ID`/`EPIC_CLIENT_SECRET` +
+  `NEXT_PUBLIC_EPIC_CLIENT_ID` for the redirect URL — they must match).
+  Verified fallback clients and a warning about fortnitePCGameClient (lost
+  its device_auth grant — do not use) are documented in `lib/epic.js`.
+- **Sign-out** revokes the device auth at Epic (best-effort), clears cookie.
+- **Client** (`app/page.js`): auth state machine; SpriteLocker-style rows —
+  one per sprite, variant tiles with owned (full colour + accent ring) /
+  pending (dimmed + pulsing dot) / missing (grayscale + lock) states.
+  Cache-first render from per-account localStorage (`sprite-ledger:v2:<id>`);
+  auto-sync only when the cache is older than 12h (CACHE_TTL_MS); the
+  "Refresh from Epic" button always syncs. Tapping a tile toggles a manual
+  override (stored separately in `manual`, reconciled over sync state).
 - **Mock mode:** `npm run dev:mock` runs a fake Epic (scripts/mock-epic.mjs)
-  with test code `deadbeefdeadbeefdeadbeefdeadbeef` — full flow offline from
-  Epic. Adam wants live testing only; the mock exists for regression checks.
+  with test code `deadbeefdeadbeefdeadbeefdeadbeef` — full flow offline,
+  emits real-shape redeem quests incl. alias slugs and an unmapped one.
+- **Tests:** `npm test` — parser regression against a fixture distilled from
+  the real 2026-07-19 sync (scripts/fixtures/). Expected: 47/89 owned.
+- **ESM:** package.json has `"type": "module"`; lib imports use explicit
+  `.js` extensions so node can run the tests unbundled.
 
 ## Constraints — do not relax these
 
 - Never accept, log, or commit tokens/secrets. `.gitignore` covers `.env*`.
-- Never hardcode SESSION_SECRET (a bootstrap fallback existed briefly for a
-  direct Vercel test and was removed before git).
+  (Epic client ids/secrets in `lib/epic.js` are public game-binary constants,
+  not secrets.)
+- Never hardcode SESSION_SECRET. It's set in Vercel; the login route
+  fail-fasts with instructions if missing — deliberate, never burn a user's
+  single-use Epic code on a misconfigured server.
 - Epic endpoints are undocumented and read-only personal-use; keep request
-  volume minimal (sync is user-initiated + one silent sync on load).
+  volume minimal (sync is user-initiated + at most one silent sync per 12h).
 - Error messages stay human: single-use code reuse, revoked device auth
   (auto sign-out + cookie clear), Epic outages, offline — all mapped in
   `lib/epic.js` friendly(). Preserve that mapping when editing.
+- Windows dev box: don't `spawn("npx", ...)` (ENOENT) — see dev-mock.mjs.
 
-## Testing already done
+## Known open items
 
-Full lifecycle verified against the mock: login (incl. whole-JSON paste
-extraction), single-use code enforcement, cookie session round-trip/tamper,
-sync item extraction + catalog mapping (Fire[Gold]L3, Fishy L5 Mastered,
-Grim Reaper[Galaxy], unmapped item routing), logout revocation. Production
-`next build` passes.
+- Next.js is pinned at 14.2.5, flagged by the Dec 2025 security advisory
+  (27 Dependabot alerts). Dependabot PR #1 bumps to 15.5.18 (major) — being
+  evaluated in a separate session; don't merge blind.
+- Air and Seven sprite slugs unverified until they appear in a live sync.
+- `vercel.json` pins framework=nextjs (project was imported with preset
+  "Other"; the pin overrides it).

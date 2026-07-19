@@ -11,8 +11,14 @@ const env = {
   NEXT_PUBLIC_MOCK: "1",
 };
 
+// Invoke Next's bin with node directly — `spawn("npx", ...)` breaks on
+// Windows (ENOENT: the shell shim is npx.cmd).
 const mock = spawn("node", ["scripts/mock-epic.mjs"], { stdio: "inherit", env });
-const next = spawn("npx", ["next", "dev"], { stdio: "inherit", env });
+const next = spawn(
+  process.execPath,
+  ["node_modules/next/dist/bin/next", "dev"],
+  { stdio: "inherit", env }
+);
 
 const stop = () => { mock.kill(); next.kill(); process.exit(0); };
 process.on("SIGINT", stop);

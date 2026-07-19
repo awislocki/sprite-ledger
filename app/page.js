@@ -2,11 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  CATALOG,
-  VARIANTS,
-  matchCatalogEntry,
-  matchVariant,
-} from "../lib/catalog";
+  SPRITES,
+  TOTAL_VARIANTS,
+  spriteVariants,
+  spriteImage,
+} from "../lib/catalog.js";
+import {
+  buildCollection,
+  OWNED,
+  PENDING,
+} from "../lib/collection.js";
 
 // Must match EPIC_CLIENT_ID in lib/epic.js — the auth code Epic issues here is
 // redeemed with that client's credentials. fortniteAndroidGameClient (Epic
@@ -16,16 +21,19 @@ const EPIC_CLIENT_ID =
 const LOGIN_URL = "https://www.epicgames.com/id/login";
 const CODE_URL = `https://www.epicgames.com/id/api/redirect?clientId=${EPIC_CLIENT_ID}&responseType=code`;
 
-const storageKey = (accountId) => `sprite-ledger:${accountId || "local"}`;
+// Auto-sync at most every 12h; the Refresh button always syncs.
+const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
-function loadCollection(accountId) {
+const storageKey = (accountId) => `sprite-ledger:v2:${accountId || "local"}`;
+
+function loadStore(accountId) {
   try {
     return JSON.parse(localStorage.getItem(storageKey(accountId))) || null;
   } catch {
     return null;
   }
 }
-function saveCollection(accountId, data) {
+function saveStore(accountId, data) {
   try {
     localStorage.setItem(storageKey(accountId), JSON.stringify(data));
   } catch {}
@@ -52,6 +60,16 @@ async function api(path, opts = {}) {
     throw err;
   }
   return data;
+}
+
+function formatAgo(iso) {
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.round(ms / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min} min ago`;
+  const h = Math.round(min / 60);
+  if (h < 48) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
 }
 
 /* ---------------- Login screen ---------------- */
@@ -180,7 +198,7 @@ function LoginScreen({ onSignedIn, toast }) {
         Your code is exchanged once, server-side, for a sign-in that's stored
         encrypted in your own browser — nothing is kept on a server, and no one
         else can see your account. Sign out any time to revoke it. Fan-made
-        tool, not affiliated with Epic Games.
+        tool, not affiliated with Epic Games. Sprite images via fortnite-api.com.
       </p>
     </div>
   );
@@ -190,16 +208,16 @@ function LoginScreen({ onSignedIn, toast }) {
 
 export default function Home() {
   const [auth, setAuth] = useState({ state: "loading" }); // loading | out | in
-  const [owned, setOwned] = useState({});
-  const [unmapped, setUnmapped] = useState([]);
-  const [attributes, setAttributes] = useState([]);
+  const [collection, setCollection] = useState({ variants: {}, unmapped: [] });
+  // Manual fallback: tap a tile to override the synced state.
+  // { "slug:Variant": true(owned) | false(not owned) }
+  const [manual, setManual] = useState({});
   const [lastSync, setLastSync] = useState(null);
   const [syncing, setSyncing] = useState(false);
-  const [filter, setFilter] = useState("needed");
-  const [element, setElement] = useState(null);
+  const [filter, setFilter] = useState("all"); // all | owned | missing
   const [toastMsg, setToastMsg] = useState(null);
   const toastTimer = useRef(null);
-  const syncedOnce = useRef(false);
+  const bootSynced = useRef(false);
 
   const toast = useCallback((msg, isError = false) => {
     clearTimeout(toastTimer.current);
@@ -208,13 +226,13 @@ export default function Home() {
   }, []);
 
   const hydrateFromCache = useCallback((accountId) => {
-    const cached = loadCollection(accountId);
+    const cached = loadStore(accountId);
     if (cached) {
-      setOwned(cached.owned || {});
-      setUnmapped(cached.unmapped || []);
-      setAttributes(cached.attributes || []);
+      setCollection(cached.collection || { variants: {}, unmapped: [] });
+      setManual(cached.manual || {});
       setLastSync(cached.lastSync || null);
     }
+    return cached;
   }, []);
 
   const sync = useCallback(
@@ -222,44 +240,19 @@ export default function Home() {
       setSyncing(true);
       try {
         const data = await api("/api/sync");
-        setOwned((prev) => {
-          const next = { ...prev };
-          const nextUnmapped = [];
-          for (const item of data.items || []) {
-            const entry = matchCatalogEntry(item.templateId);
-            if (!entry) {
-              nextUnmapped.push(item);
-              continue;
-            }
-            const variant = matchVariant(item.templateId);
-            const level =
-              Number(
-                item.attributes?.level ?? item.attributes?.sprite_level ?? 1
-              ) || 1;
-            const cur = next[entry.id] || { level: 0, variants: [] };
-            next[entry.id] = {
-              level: Math.max(cur.level, Math.min(level, 5), 1),
-              variants: Array.from(new Set([...cur.variants, variant])),
-            };
-          }
-          setUnmapped(nextUnmapped);
-          setAttributes(data.attributes || []);
-          setLastSync(data.syncedAt);
-          saveCollection(accountId, {
-            owned: next,
-            unmapped: nextUnmapped,
-            attributes: data.attributes || [],
-            lastSync: data.syncedAt,
-          });
-          return next;
-        });
+        const next = buildCollection(data.items);
+        setCollection(next);
+        setLastSync(data.syncedAt);
         if (data.empty) {
           toast(
-            "Synced, but Epic returned no Sprite data yet — you can still track by tapping cards.",
+            "Synced, but Epic returned no Sprite data yet — you can still track by tapping tiles.",
             true
           );
         } else if (!silent) {
-          toast(`Synced ${data.items.length} Sprite items from Epic`);
+          const owned = Object.values(next.variants)
+            .flatMap((vs) => Object.values(vs))
+            .filter((s) => s === OWNED).length;
+          toast(`Synced — ${owned} of ${TOTAL_VARIANTS} Sprites owned`);
         }
       } catch (err) {
         if (err.status === 401) {
@@ -275,16 +268,19 @@ export default function Home() {
     [toast]
   );
 
-  // Boot: who am I? Then cache-first render, then background sync.
+  // Boot: who am I? Cache-first render; hit Epic only if the cache is stale.
   useEffect(() => {
     (async () => {
       try {
         const me = await api("/api/auth/me", { method: "GET" });
         setAuth({ state: "in", ...me });
-        hydrateFromCache(me.accountId);
-        if (!syncedOnce.current) {
-          syncedOnce.current = true;
-          sync(me.accountId, { silent: true });
+        const cached = hydrateFromCache(me.accountId);
+        if (!bootSynced.current) {
+          bootSynced.current = true;
+          const age = cached?.lastSync
+            ? Date.now() - new Date(cached.lastSync).getTime()
+            : Infinity;
+          if (age > CACHE_TTL_MS) sync(me.accountId, { silent: true });
         }
       } catch {
         setAuth({ state: "out" });
@@ -292,19 +288,33 @@ export default function Home() {
     })();
   }, [hydrateFromCache, sync]);
 
-  // Persist manual edits too.
+  // Persist collection + manual edits per account.
   useEffect(() => {
     if (auth.state !== "in") return;
-    saveCollection(auth.accountId, { owned, unmapped, attributes, lastSync });
-  }, [owned, unmapped, attributes, lastSync, auth]);
+    saveStore(auth.accountId, { collection, manual, lastSync });
+  }, [collection, manual, lastSync, auth]);
 
-  function tapCard(id) {
-    setOwned((prev) => {
-      const cur = prev[id];
+  // Effective state of one variant tile, manual override included.
+  const statusOf = useCallback(
+    (slug, variant) => {
+      const key = `${slug}:${variant}`;
+      if (key in manual) return manual[key] ? OWNED : "missing";
+      const s = collection.variants[slug]?.[variant];
+      return s === OWNED ? OWNED : s === PENDING ? PENDING : "missing";
+    },
+    [collection, manual]
+  );
+
+  function tapTile(slug, variant) {
+    const key = `${slug}:${variant}`;
+    const synced = collection.variants[slug]?.[variant] === OWNED;
+    setManual((prev) => {
       const next = { ...prev };
-      if (!cur) next[id] = { level: 1, variants: ["Normal"] };
-      else if (cur.level < 5) next[id] = { ...cur, level: cur.level + 1 };
-      else delete next[id];
+      const cur = key in next ? next[key] : synced;
+      const flipped = !cur;
+      // Drop the override when it matches what sync says anyway.
+      if (flipped === synced) delete next[key];
+      else next[key] = flipped;
       return next;
     });
   }
@@ -314,31 +324,39 @@ export default function Home() {
       await api("/api/auth/logout");
     } catch {}
     setAuth({ state: "out" });
-    setOwned({});
-    setUnmapped([]);
-    setAttributes([]);
+    setCollection({ variants: {}, unmapped: [] });
+    setManual({});
     setLastSync(null);
-    syncedOnce.current = false;
+    bootSynced.current = false;
     toast("Signed out — your Epic access was revoked.");
   }
 
-  const collectedCount = useMemo(
-    () => CATALOG.filter((c) => owned[c.id]).length,
-    [owned]
+  // Per-sprite owned counts (manual included) drive everything below.
+  const spriteStats = useMemo(() => {
+    const stats = {};
+    for (const s of SPRITES) {
+      const vs = spriteVariants(s);
+      const owned = vs.filter((v) => statusOf(s.slug, v) === OWNED).length;
+      stats[s.slug] = { owned, total: vs.length };
+    }
+    return stats;
+  }, [statusOf]);
+
+  const ownedTotal = useMemo(
+    () => Object.values(spriteStats).reduce((n, s) => n + s.owned, 0),
+    [spriteStats]
   );
 
   const visible = useMemo(
     () =>
-      CATALOG.filter((c) => {
-        if (filter === "owned" && !owned[c.id]) return false;
-        if (filter === "needed" && owned[c.id]) return false;
-        if (element && c.element !== element) return false;
+      SPRITES.filter((s) => {
+        const st = spriteStats[s.slug];
+        if (filter === "owned") return st.owned > 0;
+        if (filter === "missing") return st.owned < st.total;
         return true;
       }),
-    [filter, element, owned]
+    [filter, spriteStats]
   );
-
-  const elements = ["fire", "water", "earth", "mythic", "other"];
 
   /* ---------- render ---------- */
 
@@ -381,34 +399,32 @@ export default function Home() {
               </button>
             </div>
             <div className="hud-count">
-              {collectedCount}
-              <small> / {CATALOG.length} extracted</small>
+              {ownedTotal}
+              <small> / {TOTAL_VARIANTS} collected</small>
             </div>
             <div
               className="dustbar"
-              aria-label={`${collectedCount} of ${CATALOG.length} sprites collected`}
+              aria-label={`${ownedTotal} of ${TOTAL_VARIANTS} sprite variants collected`}
             >
-              {CATALOG.map((c, i) => (
-                <span key={c.id} className={i < collectedCount ? "lit" : ""} />
-              ))}
+              {SPRITES.map((s) => {
+                const st = spriteStats[s.slug];
+                const cls =
+                  st.owned === st.total ? "lit" : st.owned > 0 ? "part" : "";
+                return <span key={s.slug} className={cls} />;
+              })}
             </div>
             <div className="chips">
-              {["needed", "owned", "all"].map((f) => (
+              {[
+                ["all", "All"],
+                ["owned", "Owned"],
+                ["missing", "Missing"],
+              ].map(([f, label]) => (
                 <button
                   key={f}
                   className={`chip ${filter === f ? "on" : ""}`}
                   onClick={() => setFilter(f)}
                 >
-                  {f === "all" ? "All" : f === "needed" ? "Still needed" : "Owned"}
-                </button>
-              ))}
-              {elements.map((e) => (
-                <button
-                  key={e}
-                  className={`chip ${element === e ? "on" : ""}`}
-                  onClick={() => setElement(element === e ? null : e)}
-                >
-                  {e[0].toUpperCase() + e.slice(1)}
+                  {label}
                 </button>
               ))}
             </div>
@@ -416,56 +432,93 @@ export default function Home() {
 
           {visible.length === 0 ? (
             <div className="empty">
-              {filter === "needed" && collectedCount === CATALOG.length
+              {filter === "missing" && ownedTotal === TOTAL_VARIANTS
                 ? "Full collection. Go touch grass, Guardian."
                 : "Nothing matches this filter."}
             </div>
           ) : (
-            <div className="grid">
-              {visible.map((c) => {
-                const o = owned[c.id];
+            <div className="rows">
+              {visible.map((s) => {
+                const st = spriteStats[s.slug];
+                const complete = st.owned === st.total;
                 return (
-                  <button
-                    key={c.id}
-                    className={`card ${o ? "owned" : "needed"}`}
-                    style={{ "--accent": `var(--${c.element})` }}
-                    onClick={() => tapCard(c.id)}
-                    aria-pressed={!!o}
+                  <section
+                    key={s.slug}
+                    className={`srow ${st.owned > 0 ? "started" : "untouched"}`}
+                    style={{ "--accent": `var(--${s.element})` }}
                   >
-                    {o?.level === 5 && <span className="mastered">MASTERED</span>}
-                    <div className="orb" aria-hidden="true" />
-                    <h3>{c.name}</h3>
-                    <div className="tier">{c.tier}</div>
-                    <div
-                      className="pips"
-                      aria-label={o ? `Level ${o.level} of 5` : "Not owned"}
-                    >
-                      {[1, 2, 3, 4, 5].map((lv) => (
-                        <i key={lv} className={o && lv <= o.level ? "lit" : ""} />
-                      ))}
+                    <div className="srow-head">
+                      <img
+                        className="srow-icon"
+                        src={spriteImage(s)}
+                        alt=""
+                        loading="lazy"
+                        width={44}
+                        height={44}
+                      />
+                      <h3>{s.name}</h3>
+                      <span className={`srow-count ${complete ? "done" : ""}`}>
+                        {complete ? "✓ " : ""}
+                        {st.owned}/{st.total}
+                      </span>
                     </div>
-                    <div className="vdots" aria-hidden="true">
-                      {VARIANTS.map((v) => (
-                        <b
-                          key={v}
-                          className={o?.variants?.includes(v) ? "have" : ""}
-                          title={v}
-                        />
-                      ))}
+                    <div className="vstrip">
+                      {spriteVariants(s).map((v) => {
+                        const state = statusOf(s.slug, v);
+                        return (
+                          <button
+                            key={v}
+                            className={`vtile ${state}`}
+                            onClick={() => tapTile(s.slug, v)}
+                            aria-pressed={state === OWNED}
+                            aria-label={`${s.name} ${v}: ${
+                              state === OWNED
+                                ? "owned"
+                                : state === PENDING
+                                ? "quest in progress"
+                                : "not owned"
+                            }. Tap to toggle manually.`}
+                          >
+                            <span className="vtile-img">
+                              <img
+                                src={spriteImage(s, v)}
+                                alt=""
+                                loading="lazy"
+                                width={58}
+                                height={58}
+                              />
+                              {state === "missing" && (
+                                <span className="vlock" aria-hidden="true">
+                                  🔒
+                                </span>
+                              )}
+                              {state === PENDING && (
+                                <span className="vpending" aria-hidden="true" />
+                              )}
+                            </span>
+                            <span className={`vlabel v-${v.toLowerCase()}`}>
+                              {v === "Normal" ? "Base" : v}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
-                  </button>
+                  </section>
                 );
               })}
             </div>
           )}
 
-          {unmapped.length > 0 && (
+          {collection.unmapped.length > 0 && (
             <>
               <div className="section-label">New from Epic — not in catalog yet</div>
-              {unmapped.map((u) => (
-                <div className="raw" key={u.itemId}>
+              {collection.unmapped.map((u, i) => (
+                <div className="raw" key={`${u.templateId}-${i}`}>
                   <b>{u.templateId}</b>
-                  <div>qty {u.quantity} · {u.profileId}</div>
+                  <div>
+                    {u.state ? `quest ${u.state} · ` : ""}
+                    {u.via}
+                  </div>
                 </div>
               ))}
             </>
@@ -477,14 +530,14 @@ export default function Home() {
               onClick={() => sync(auth.accountId)}
               disabled={syncing}
             >
-              {syncing ? "Syncing…" : "Sync from Epic"}
+              {syncing ? "Syncing…" : "Refresh from Epic"}
             </button>
           </div>
-          {lastSync && (
-            <div className="sync-status">
-              Last synced {new Date(lastSync).toLocaleString()}
-            </div>
-          )}
+          <div className="sync-status">
+            {lastSync
+              ? `Synced ${formatAgo(lastSync)} · auto-syncs every 12h — refresh any time`
+              : "Not synced yet"}
+          </div>
         </>
       )}
     </main>

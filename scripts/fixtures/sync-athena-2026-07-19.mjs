@@ -1,0 +1,146 @@
+// Compact fixture distilled from a real /api/sync response (athena profile,
+// 2026-07-19). Each entry: [vtid suffix after "vtid_backpack_coldtrophy_",
+// quest_state]. Account identifiers and item GUIDs stripped.
+//
+// Expected parse (see test-collection.mjs): 47 owned variants of 89 total;
+// The Burnt Peanut complete (1/1); Grim Reaper 0 owned with all 4 pending;
+// Air and Seven entirely unseen.
+
+const REDEEM = [
+  ["water", "Claimed"], ["water_gummy", "Claimed"], ["water_galaxy", "Active"],
+  ["water_gold", "Claimed"], ["water_holofoil", "Claimed"], ["water_gem", "Active"],
+
+  ["earth", "Claimed"], ["earth_gold", "Claimed"], ["earth_gummy", "Claimed"],
+  ["earth_galaxy", "Claimed"], ["earth_gem", "Active"],
+
+  ["fire", "Claimed"], ["fire_galaxy", "Claimed"], ["fire_gold", "Claimed"],
+  ["fire_gummy", "Claimed"], ["fire_holofoil", "Claimed"],
+
+  ["duck", "Claimed"], ["duck_gummy", "Claimed"], ["duck_gold", "Claimed"],
+  ["duck_galaxy", "Active"], ["duck_gem", "Active"],
+
+  ["ghost", "Claimed"], ["ghost_gummy", "Claimed"], ["ghost_gold", "Claimed"],
+  ["ghost_galaxy", "Active"], ["ghost_holofoil", "Claimed"],
+
+  ["reddemon", "Claimed"], ["reddemon_gummy", "Claimed"], ["reddemon_gold", "Claimed"],
+  ["reddemon_galaxy", "Claimed"], ["reddemon_gem", "Active"],
+
+  ["king", "Claimed"], ["king_gold", "Claimed"], ["king_gummy", "Active"],
+  ["king_galaxy", "Active"], ["king_holofoil", "Claimed"],
+
+  ["sleepy", "Claimed"], ["sleepy_gold", "Claimed"], ["sleepy_gummy", "Claimed"],
+  ["sleepy_galaxy", "Active"],
+
+  ["punk", "Claimed"], ["punk_gold", "Active"], ["punk_gummy", "Active"],
+  ["punk_galaxy", "Active"],
+
+  ["crispynut", "Claimed"],
+
+  ["zeropoint", "Claimed"], ["zeropoint_gummy", "Claimed"], ["zeropoint_gold", "Active"],
+  ["zeropoint_galaxy", "Active"], ["zeropoint_gem", "Active"],
+
+  ["fishy", "Claimed"], ["fishy_gummy", "Claimed"], ["fishy_gold", "Claimed"],
+  ["fishy_galaxy", "Claimed"],
+
+  ["soccer", "Claimed"], ["soccer_gummy", "Claimed"], ["soccer_gold", "Claimed"],
+  ["soccer_galaxy", "Active"], ["soccer_holofoil", "Active"],
+
+  ["drifter", "Claimed"], ["drifter_gummy", "Claimed"], ["drifter_gold", "Claimed"],
+  ["drifter_galaxy", "Active"], ["drifter_gem", "Active"],
+
+  ["boss", "Claimed"], ["boss_gold", "Claimed"], ["boss_galaxy", "Claimed"],
+  ["boss_gummy", "Active"],
+
+  ["grimreaper", "Active"], ["grimreaper_gold", "Active"],
+  ["grimreaper_gummy", "Active"], ["grimreaper_galaxy", "Active"],
+];
+
+export const EXPECTED = { owned: 47, pending: 25 };
+
+export function fixtureItems() {
+  const items = REDEEM.map(([suffix, state], i) => ({
+    itemId: `fixture-${i}`,
+    templateId: `Quest:quest_s41_spritemastery_redeem_fixture_${suffix}`,
+    quantity: 1,
+    attributes: {
+      quest_state: state,
+      premium_rewards: {
+        rewards: [
+          {
+            templateId: `CosmeticVariantToken:vtid_backpack_coldtrophy_${suffix}`,
+            quantity: 1,
+          },
+        ],
+      },
+    },
+    profileId: "athena",
+  }));
+
+  // Season plumbing that must be ignored silently.
+  items.push(
+    {
+      itemId: "noise-1",
+      templateId: "Quest:quest_s41_spritemastery_p01_q01",
+      quantity: 1,
+      attributes: {
+        quest_state: "Claimed",
+        premium_rewards: {
+          rewards: [
+            { templateId: "Token:athena_s41_spritemastery_token_q01", quantity: 1 },
+          ],
+        },
+      },
+      profileId: "athena",
+    },
+    {
+      itemId: "noise-2",
+      templateId: "Token:athena_s41_spritemastery_token_q01",
+      quantity: 1,
+      attributes: { level: 1 },
+      profileId: "athena",
+    },
+    {
+      itemId: "noise-3",
+      templateId: "ChallengeBundle:questbundle_s41_bpquests_spritemastery_01",
+      quantity: 1,
+      attributes: {},
+      profileId: "athena",
+    },
+    {
+      itemId: "noise-4",
+      templateId: "ChallengeBundleSchedule:s41_bpquests_spritemastery_schedule_p01",
+      quantity: 1,
+      attributes: {},
+      profileId: "athena",
+    },
+    {
+      itemId: "noise-5",
+      templateId: "Quest:quest_daily_s41_spriteextvendingpurchasegate",
+      quantity: 1,
+      attributes: { quest_state: "Claimed" },
+      profileId: "athena",
+    }
+  );
+
+  // Unknown future slug — must land in `unmapped`, not be dropped.
+  items.push({
+    itemId: "future-1",
+    templateId: "Quest:quest_s41_spritemastery_redeem_fixture_wanderer",
+    quantity: 1,
+    attributes: {
+      quest_state: "Active",
+      premium_rewards: {
+        rewards: [
+          {
+            templateId:
+              "CosmeticVariantToken:vtid_backpack_coldtrophy_wanderer_gold",
+            quantity: 1,
+          },
+        ],
+      },
+    },
+    profileId: "athena",
+  });
+
+  return items;
+}

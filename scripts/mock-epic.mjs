@@ -15,12 +15,43 @@ const usedCodes = new Set();
 const deviceAuths = new Map(); // deviceId -> { accountId, secret }
 const ACCOUNT = { id: "mock-account-adam", displayName: "TestGuardian" };
 
+// Mirrors the real profile shape: sprite ownership lives in
+// "spritemastery_redeem" quests whose premium reward is a
+// CosmeticVariantToken:vtid_backpack_coldtrophy_<slug>[_<style>].
+// Claimed = owned, Active = not yet. Includes alias slugs (sleepy→Dream,
+// drifter→Aura), plumbing that must be ignored, and one unknown slug so the
+// "New from Epic" path stays exercised.
+const redeemQuest = (suffix, state) => ({
+  templateId: `Quest:quest_s41_spritemastery_redeem_mock_${suffix}`,
+  quantity: 1,
+  attributes: {
+    quest_state: state,
+    premium_rewards: {
+      rewards: [
+        {
+          templateId: `CosmeticVariantToken:vtid_backpack_coldtrophy_${suffix}`,
+          quantity: 1,
+        },
+      ],
+    },
+  },
+});
+
 const SPRITE_ITEMS = {
-  "item-1": { templateId: "SpritePet:sprite_fire_gold", quantity: 1, attributes: { level: 3 } },
-  "item-2": { templateId: "SpritePet:sprite_fishy", quantity: 1, attributes: { level: 5 } },
-  "item-3": { templateId: "SpritePet:sprite_grimreaper_galaxy", quantity: 1, attributes: { level: 2 } },
-  "item-4": { templateId: "SpritePet:sprite_water", quantity: 1, attributes: { level: 1 } },
-  "item-5": { templateId: "SpritePet:sprite_wanderer", quantity: 1, attributes: { level: 4 } }, // unmapped on purpose
+  "item-1": redeemQuest("fire_gold", "Claimed"),
+  "item-2": redeemQuest("fire", "Claimed"),
+  "item-3": redeemQuest("fishy", "Claimed"),
+  "item-4": redeemQuest("grimreaper_galaxy", "Active"),
+  "item-5": redeemQuest("water", "Claimed"),
+  "item-6": redeemQuest("water_gem", "Active"),
+  "item-7": redeemQuest("sleepy_gold", "Claimed"), // alias → Dream
+  "item-8": redeemQuest("drifter", "Claimed"), // alias → Aura
+  "item-9": redeemQuest("wanderer_gold", "Claimed"), // unmapped on purpose
+  "item-10": {
+    templateId: "Token:athena_s41_spritemastery_token_q01",
+    quantity: 1,
+    attributes: { level: 1 },
+  },
 };
 
 function json(res, status, body) {

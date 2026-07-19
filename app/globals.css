@@ -78,54 +78,93 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 }
 .chip.on { color: var(--obsidian); background: var(--dust); border-color: var(--dust); }
 
-/* ---------- Sprite grid ---------- */
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 0 20px; }
-@media (min-width: 440px) { .grid { grid-template-columns: 1fr 1fr 1fr; } }
+/* ---------- Sprite rows (one per sprite, variant tiles inside) ---------- */
+.rows { display: flex; flex-direction: column; gap: 10px; padding: 10px 0 20px; }
 
-.card {
-  position: relative;
+.srow {
   background: var(--ridge);
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 14px 12px 12px;
-  text-align: left;
-  transition: transform 0.12s ease, border-color 0.2s ease;
+  padding: 12px 12px 10px;
 }
-.card:active { transform: scale(0.97); }
-.card.owned { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: var(--ridge-hi); }
-.card.needed { opacity: 0.72; }
+.srow.started { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.srow.untouched { opacity: 0.8; }
 
-.orb {
-  width: 40px; height: 40px; border-radius: 50%;
-  margin-bottom: 10px;
-  background: radial-gradient(circle at 32% 30%, color-mix(in srgb, var(--accent) 85%, white), var(--accent) 55%, color-mix(in srgb, var(--accent) 30%, var(--obsidian)));
-  box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 45%, transparent);
-  filter: saturate(0.4) brightness(0.6);
+.srow-head { display: flex; align-items: center; gap: 10px; }
+.srow-icon {
+  width: 44px; height: 44px; object-fit: contain;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 35%, transparent));
 }
-.card.owned .orb { filter: none; }
-
-.card h3 {
-  font-family: var(--display); font-size: 15px; font-weight: 600; line-height: 1.2;
+.srow.untouched .srow-icon { filter: grayscale(1) brightness(0.65); }
+.srow-head h3 { font-family: var(--display); font-size: 16px; font-weight: 600; flex: 1; }
+.srow-count {
+  font-family: var(--display); font-size: 13px; font-weight: 700;
+  font-variant-numeric: tabular-nums; color: var(--slate);
 }
-.card .tier { font-size: 11px; color: var(--slate); margin-top: 2px; }
+.srow-count.done { color: var(--dust); }
 
-.pips { display: flex; gap: 3px; margin-top: 9px; }
-.pips i {
-  width: 12px; height: 5px; border-radius: 2px; background: var(--line);
+.vstrip {
+  display: flex; gap: 8px; overflow-x: auto;
+  padding: 10px 2px 4px; scrollbar-width: none;
 }
-.pips i.lit { background: var(--accent); }
+.vstrip::-webkit-scrollbar { display: none; }
 
-.vdots { display: flex; gap: 4px; margin-top: 7px; }
-.vdots b {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--line); border: 1px solid var(--line);
+.vtile {
+  flex: none; width: 76px;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 8px 4px 7px; border-radius: 12px;
+  border: 1px solid var(--line);
+  transition: transform 0.12s ease, border-color 0.2s ease, background 0.2s ease;
 }
-.vdots b.have { background: var(--dust); border-color: var(--dust); }
+.vtile:active { transform: scale(0.95); }
 
-.mastered {
-  position: absolute; top: 9px; right: 10px;
+.vtile-img { position: relative; width: 58px; height: 58px; }
+.vtile-img img { width: 100%; height: 100%; object-fit: contain; }
+
+/* Owned: full colour on a lifted card with the sprite's accent ring */
+.vtile.owned {
+  background: var(--ridge-hi);
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--line));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* Missing: greyed out and locked on a sunken dark card */
+.vtile.missing { background: var(--obsidian); }
+.vtile.missing .vtile-img img { filter: grayscale(1) brightness(0.45); }
+.vlock {
+  position: absolute; right: -2px; bottom: -2px;
+  font-size: 13px; line-height: 1;
+  filter: grayscale(1) brightness(1.6);
+}
+
+/* Pending: the redeem quest exists but isn't claimed yet */
+.vtile.pending { background: var(--obsidian); }
+.vtile.pending .vtile-img img { filter: grayscale(0.7) brightness(0.6); }
+.vpending {
+  position: absolute; right: 0; bottom: 0;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--dust);
+  box-shadow: 0 0 6px var(--dust);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.vlabel {
   font-family: var(--display); font-size: 9px; font-weight: 700;
-  letter-spacing: 0.14em; color: var(--dust);
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--slate);
+}
+.vtile.owned .vlabel { color: var(--ink); }
+.v-gold { color: var(--dust); }
+.vtile.owned .v-gold { color: var(--dust); }
+.vtile.owned .v-gummy { color: #ff8ad2; }
+.vtile.owned .v-galaxy { color: var(--mythic); }
+.vtile.owned .v-gem { color: var(--water); }
+.vtile.owned .v-holofoil { color: #9be8d8; }
+.vtile.owned .v-cube { color: var(--mythic); }
+.vtile.owned .v-quack { color: var(--dust); }
+
+.dustbar span.part {
+  background: linear-gradient(90deg, var(--dust-dim), var(--line));
 }
 
 /* ---------- Sections / misc ---------- */
@@ -223,7 +262,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   background: var(--obsidian); color: var(--ink); font-size: 14px;
 }
 .step-body input:focus-visible,
-.btn-step:focus-visible, .chip:focus-visible, .card:focus-visible,
+.btn-step:focus-visible, .chip:focus-visible, .vtile:focus-visible,
 .btn-sync:focus-visible, .acct-name:focus-visible {
   outline: 2px solid var(--dust); outline-offset: 2px;
 }
