@@ -452,23 +452,23 @@ function SpriteRow({ sprite: s, tiles, stats, level, statusOf }) {
         alt=""
         aria-hidden="true"
         loading="lazy"
-        width={132}
-        height={132}
+        width={196}
+        height={196}
       />
       <div className="srow-head">
         <h3>
           {s.name}
           {mastered && <Crown />}
         </h3>
+        <span className={`srow-count ${complete ? "done" : ""}`}>
+          {complete ? "✓ " : ""}
+          {stats.owned}/{stats.total}
+        </span>
         {level > 0 && !mastered && (
           <span className="lvl" aria-label={`Mastery level ${level}`}>
             L{level}
           </span>
         )}
-        <span className={`srow-count ${complete ? "done" : ""}`}>
-          {complete ? "✓ " : ""}
-          {stats.owned}/{stats.total}
-        </span>
       </div>
       <div className="vstrip">
         {tiles.map((v) => {

@@ -97,33 +97,55 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   box-shadow: inset 0 0 24px color-mix(in srgb, var(--dust) 8%, transparent);
 }
 
-/* Hero: big, tilted, bleeding past the top-right corner (clipped by the
-   card), monochrome until the row scrolls into the centre of the screen. */
+/* Hero: oversized, tilted, bursting out of the lower-right corner (clipped
+   by the card), riding an accent glow — monochrome until the row scrolls
+   into the centre of the screen. The variant strip reserves the corner. */
+.srow::after {
+  content: ""; position: absolute; z-index: 0;
+  right: -40px; bottom: -50px; width: 220px; height: 220px;
+  background: radial-gradient(circle,
+    color-mix(in srgb, var(--accent) 26%, transparent) 0%, transparent 65%);
+  opacity: 0; transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+.srow.infocus::after { opacity: 1; }
 .srow-hero {
-  position: absolute; right: -20px; top: -18px; z-index: 0;
-  width: 132px; height: 132px; object-fit: contain;
-  transform: rotate(-14deg) scale(1);
-  filter: grayscale(1) brightness(0.62) contrast(1.05);
-  opacity: 0.9;
+  position: absolute; right: -34px; bottom: -44px; z-index: 0;
+  width: 196px; height: 196px; object-fit: contain;
+  transform: rotate(-16deg);
+  filter: grayscale(1) brightness(0.55) contrast(1.08);
+  opacity: 0.85;
   pointer-events: none;
   transition: filter 0.5s ease, transform 0.5s ease, opacity 0.5s ease;
 }
 .srow.infocus .srow-hero {
   filter: grayscale(0) brightness(1)
-    drop-shadow(0 0 18px color-mix(in srgb, var(--accent) 45%, transparent));
-  transform: rotate(-9deg) scale(1.06);
+    drop-shadow(0 0 22px color-mix(in srgb, var(--accent) 55%, transparent));
+  transform: rotate(-10deg) scale(1.07);
   opacity: 1;
 }
 
 .srow-head {
   position: relative; z-index: 1;
-  display: flex; align-items: center; gap: 10px;
-  min-height: 44px; padding-right: 118px;
+  display: flex; align-items: baseline; gap: 10px;
+  min-height: 34px;
 }
+/* Name: uppercase, skewed, gradient-filled with the sprite's accent —
+   count rides right alongside it. */
 .srow-head h3 {
-  font-family: var(--display); font-size: 17px; font-weight: 600; flex: 1;
-  display: flex; align-items: center; gap: 8px;
+  font-family: var(--display); font-size: 21px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  transform: skewX(-8deg);
+  display: inline-flex; align-items: center; gap: 8px;
+  background: linear-gradient(105deg,
+    color-mix(in srgb, var(--accent) 80%, white) 0%,
+    var(--ink) 55%,
+    color-mix(in srgb, var(--accent) 60%, var(--ink)) 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  filter: drop-shadow(0 1px 6px color-mix(in srgb, var(--accent) 35%, transparent));
 }
+.srow-head h3 .crown { -webkit-text-fill-color: initial; }
 .crown {
   width: 22px; height: 16px; fill: var(--dust);
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--dust) 70%, transparent));
@@ -138,6 +160,8 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   position: relative; z-index: 1;
   display: flex; gap: 8px; overflow-x: auto;
   padding: 10px 2px 4px; scrollbar-width: none;
+  /* keep the lower-right corner clear so the hero owns it */
+  margin-right: 76px;
 }
 .vstrip::-webkit-scrollbar { display: none; }
 
