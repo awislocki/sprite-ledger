@@ -35,10 +35,50 @@ function profileDebug(data) {
       l: i.attributes?.level,
       ak: Object.keys(i.attributes || {}).filter((k) => k !== "level"),
     }));
+
+  // Structural overview: how many items of each templateId namespace
+  // (the part before ":"). Reveals what KINDS of records exist.
+  const namespaces = {};
+  for (const i of items) {
+    const ns = String(i.templateId || "").split(":")[0] || "?";
+    namespaces[ns] = (namespaces[ns] || 0) + 1;
+  }
+
+  // Collab sprites award their OWN backbling, not a ColdTrophy variant — so
+  // capture EVERY backpack that carries a cosmetic-variant channel (the
+  // pod-like discriminator) plus its owned-style tags. A separate Batman/
+  // Vini pod would surface here even though it never matches /sprite/.
+  const variantBackpacks = items
+    .filter(
+      (i) =>
+        /^AthenaBackpack:/i.test(i.templateId || "") &&
+        Array.isArray(i.attributes?.variants) &&
+        i.attributes.variants.length
+    )
+    .map((i) => ({
+      t: i.templateId,
+      channels: i.attributes.variants.map((v) => ({
+        c: v.channel,
+        active: v.active,
+        owned: (v.owned || []).length,
+        // the actual owned tags — small enough, and this is the ownership list
+        tags: v.owned || [],
+      })),
+    }));
+
+  // Any standalone CosmeticVariantToken items (a collab sprite might grant a
+  // non-coldtrophy variant token we currently ignore).
+  const variantTokens = items
+    .filter((i) => /^CosmeticVariantToken:/i.test(i.templateId || ""))
+    .map((i) => i.templateId);
+
   return {
     itemCount: items.length,
+    namespaces,
     statAttrKeys: Object.keys(prof.stats?.attributes || {}),
     spriteItemCount: sprite.length,
+    variantBackpacks,
+    variantTokens,
     // Any sprite item whose level or quantity is above 1 — the mastery signal
     // we're hunting for, if it exists anywhere.
     leveled: sprite.filter((s) => (s.l && s.l > 1) || (s.q && s.q > 1)),

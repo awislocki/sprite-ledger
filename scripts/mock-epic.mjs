@@ -103,6 +103,24 @@ const SPRITE_ITEMS = {
       },
     ])
   ),
+  // The shared Sprite Mastery Pod with its owned styles — the "backbling"
+  // list the recon reads.
+  "backpack-pod": {
+    templateId: "AthenaBackpack:backpack_coldtrophy",
+    quantity: 1,
+    attributes: {
+      variants: [{ channel: "Mesh", active: "Mat13", owned: ["Mat13", "Mat14", "Stage6"] }],
+    },
+  },
+  // A COLLAB sprite that awards its OWN backbling (no ColdTrophy variant) —
+  // this is what the widened recon must surface so we can find Batman/Vini.
+  "backpack-collab": {
+    templateId: "AthenaBackpack:backpack_batmansprite",
+    quantity: 1,
+    attributes: {
+      variants: [{ channel: "Mesh", active: "Mat1", owned: ["Mat1", "Mat2"] }],
+    },
+  },
 };
 
 function json(res, status, body) {
