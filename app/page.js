@@ -438,10 +438,13 @@ function SpriteRow({ sprite: s, tiles, stats, level, statusOf }) {
   const [ref, focus] = useCenterFocus();
   const complete = stats.owned === stats.total;
   const mastered = level >= MASTERY_LEVEL;
+  // Mastery progress proves the sprite is caught in-game even when no pod
+  // style is unlocked yet — those rows light up too.
+  const caught = stats.owned > 0 || level > 0;
   return (
     <section
       ref={ref}
-      className={`srow ${stats.owned > 0 ? "started" : "untouched"} ${
+      className={`srow ${caught ? "started" : "untouched"} ${
         mastered ? "mastered" : ""
       } ${focus ? "infocus" : ""}`}
       style={{ "--accent": `var(--${s.element})` }}
@@ -780,9 +783,21 @@ export default function Home() {
             </div>
           )}
 
-          {collection.unmapped.length > 0 && (
+          {(collection.unmapped.length > 0 ||
+            Object.keys(collection.unknownChains || {}).length > 0) && (
             <>
               <div className="section-label">New from Epic — not in catalog yet</div>
+              {Object.entries(collection.unknownChains || {}).map(
+                ([chain, lvl]) => (
+                  <div className="raw" key={`chain-${chain}`}>
+                    <b>Unreleased sprite — mastery chain q{chain}</b>
+                    <div>
+                      level {lvl} · you've caught this one in-game; its pod
+                      styles aren't in Epic's catalog yet
+                    </div>
+                  </div>
+                )
+              )}
               {collection.unmapped.map((u, i) => (
                 <div className="raw" key={`${u.templateId}-${i}`}>
                   <b>{u.templateId}</b>

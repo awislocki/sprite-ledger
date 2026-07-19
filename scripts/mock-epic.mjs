@@ -64,6 +64,18 @@ const SPRITE_ITEMS = {
       },
     ])
   ),
+  // Seven caught in-game (chain q17, L2) with zero pod styles unlocked,
+  // plus an orphan chain (q22) for the "unreleased sprite" section.
+  ...Object.fromEntries(
+    ["q17", "q17c", "q22"].map((t) => [
+      `mastery-${t}`,
+      {
+        templateId: `Token:athena_s41_spritemastery_token_${t}`,
+        quantity: 1,
+        attributes: { level: 1 },
+      },
+    ])
+  ),
 };
 
 function json(res, status, body) {

@@ -160,6 +160,27 @@ export function fixtureItems() {
     },
     profileId: "athena",
   });
+  // Seeded-by-elimination chains: q16 = Air (L1), q17 = Seven (L2) —
+  // mirrors the real account, where these chains have progress but no
+  // redeem quests exist yet.
+  for (const t of ["q16", "q17", "q17c"]) {
+    items.push({
+      itemId: `mastery-${t}`,
+      templateId: `Token:athena_s41_spritemastery_token_${t}`,
+      quantity: 1,
+      attributes: { level: 1 },
+      profileId: "athena",
+    });
+  }
+  // Chain q22 maps to nothing at all → must surface as an unknown chain.
+  items.push({
+    itemId: "mastery-q22",
+    templateId: "Token:athena_s41_spritemastery_token_q22",
+    quantity: 1,
+    attributes: { level: 1 },
+    profileId: "athena",
+  });
+
   // Chain q19 is NOT in the seed — this redeem quest teaches the mapping
   // (reward names Seven), and its two tokens then count as Seven mastery.
   items.push({

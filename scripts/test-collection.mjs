@@ -43,8 +43,10 @@ assert.equal(col.variants.fire.Normal, OWNED, "backpack tag overlap, no dupe");
 // Mastery levels from quest-chain step counts
 assert.equal(col.mastery.water, 4, "water: q01 quest + 3 tokens = L4");
 assert.equal(col.mastery.fire, 5, "fire: 4 tokens + claimed step quest = L5 (crown)");
-assert.equal(col.mastery.seven, 2, "unseeded chain q19 learned from redeem reward");
+assert.equal(col.mastery.air, 1, "seeded-by-elimination chain q16 → Air");
+assert.equal(col.mastery.seven, 2, "q17 seed and q19 dynamic mapping agree");
 assert.equal(col.mastery.grimreaper, undefined, "no mastery signal → no level");
+assert.deepEqual(col.unknownChains, { 22: 1 }, "orphan chain surfaces, not dropped");
 
 // Unknown slug surfaces instead of vanishing
 assert.equal(col.unmapped.length, 1);
