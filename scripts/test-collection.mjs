@@ -40,6 +40,12 @@ assert.equal(col.variants.seven.Gold, OWNED, "owned vtid token → Seven Gold");
 assert.equal(col.variants.seven.Normal, OWNED, "backpack style tag → Seven Base");
 assert.equal(col.variants.fire.Normal, OWNED, "backpack tag overlap, no dupe");
 
+// Mastery levels from quest-chain step counts
+assert.equal(col.mastery.water, 4, "water: q01 quest + 3 tokens = L4");
+assert.equal(col.mastery.fire, 5, "fire: 4 tokens + claimed step quest = L5 (crown)");
+assert.equal(col.mastery.seven, 2, "unseeded chain q19 learned from redeem reward");
+assert.equal(col.mastery.grimreaper, undefined, "no mastery signal → no level");
+
 // Unknown slug surfaces instead of vanishing
 assert.equal(col.unmapped.length, 1);
 assert.match(col.unmapped[0].templateId, /wanderer_gold/);

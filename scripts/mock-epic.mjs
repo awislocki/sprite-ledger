@@ -53,6 +53,17 @@ const SPRITE_ITEMS = {
     quantity: 1,
     attributes: { level: 1 },
   },
+  // Fire (chain q03) at 5 mastery steps → gold crown in the UI.
+  ...Object.fromEntries(
+    ["", "a", "b", "c", "d"].map((step, i) => [
+      `mastery-${i}`,
+      {
+        templateId: `Token:athena_s41_spritemastery_token_q03${step}`,
+        quantity: 1,
+        attributes: { level: 1 },
+      },
+    ])
+  ),
 };
 
 function json(res, status, body) {

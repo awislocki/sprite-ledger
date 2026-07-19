@@ -125,6 +125,70 @@ export function fixtureItems() {
     }
   );
 
+  // Mastery progression: chain q01 = Water (seeded). noise-1 above is the
+  // Claimed mastery quest for step "", these tokens add steps a/c/e → L4.
+  for (const step of ["a", "c", "e"]) {
+    items.push({
+      itemId: `mastery-water-${step}`,
+      templateId: `Token:athena_s41_spritemastery_token_q01${step}`,
+      quantity: 1,
+      attributes: { level: 1 },
+      profileId: "athena",
+    });
+  }
+  // Chain q03 = Fire: 4 tokens + 1 Claimed mastery quest = 5 steps → crown.
+  for (const step of ["", "a", "b", "c"]) {
+    items.push({
+      itemId: `mastery-fire-${step || "base"}`,
+      templateId: `Token:athena_s41_spritemastery_token_q03${step}`,
+      quantity: 1,
+      attributes: { level: 1 },
+      profileId: "athena",
+    });
+  }
+  items.push({
+    itemId: "mastery-fire-quest",
+    templateId: "Quest:quest_s41_spritemastery_p02_q03d",
+    quantity: 1,
+    attributes: {
+      quest_state: "Claimed",
+      premium_rewards: {
+        rewards: [
+          { templateId: "Token:athena_s41_spritemastery_token_q03d", quantity: 1 },
+        ],
+      },
+    },
+    profileId: "athena",
+  });
+  // Chain q19 is NOT in the seed — this redeem quest teaches the mapping
+  // (reward names Seven), and its two tokens then count as Seven mastery.
+  items.push({
+    itemId: "redeem-seven",
+    templateId: "Quest:quest_s41_spritemastery_redeem_p03_q19",
+    quantity: 1,
+    attributes: {
+      quest_state: "Active",
+      premium_rewards: {
+        rewards: [
+          {
+            templateId: "CosmeticVariantToken:vtid_backpack_coldtrophy_seven",
+            quantity: 1,
+          },
+        ],
+      },
+    },
+    profileId: "athena",
+  });
+  for (const step of ["", "a"]) {
+    items.push({
+      itemId: `mastery-seven-${step || "base"}`,
+      templateId: `Token:athena_s41_spritemastery_token_q19${step}`,
+      quantity: 1,
+      attributes: { level: 1 },
+      profileId: "athena",
+    });
+  }
+
   // Directly-owned variant token (granted outside the quest flow — vending,
   // later phases). This is how sprites like Seven appear when no redeem
   // quest exists yet; the /sprite/i server filter used to drop these.

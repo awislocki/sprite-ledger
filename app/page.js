@@ -9,7 +9,12 @@ import {
   spriteVariants,
   spriteImage,
 } from "../lib/catalog.js";
-import { buildCollection, OWNED, PENDING } from "../lib/collection.js";
+import {
+  buildCollection,
+  OWNED,
+  PENDING,
+  MASTERY_LEVEL,
+} from "../lib/collection.js";
 import { encodeCode, decodeCode, tradeDiff, ownedKeySet } from "../lib/share.js";
 import { renderShareImage, shareOrDownload } from "../lib/share-image.js";
 
@@ -115,7 +120,7 @@ function useCenterFocus() {
 }
 
 const Crown = () => (
-  <svg className="crown" viewBox="0 0 24 17" role="img" aria-label="Mastered — all variants owned">
+  <svg className="crown" viewBox="0 0 24 17" role="img" aria-label="Mastered — level 5">
     <path d="M2 14 L1 3.5 L7.2 7.8 L12 1 L16.8 7.8 L23 3.5 L22 14 Z" />
     <rect x="3" y="15" width="18" height="2" rx="1" />
   </svg>
@@ -429,14 +434,15 @@ function SharePanel({ collection, displayName, ownedTotal, toast }) {
 
 /* ---------------- Sprite row ---------------- */
 
-function SpriteRow({ sprite: s, tiles, stats, statusOf }) {
+function SpriteRow({ sprite: s, tiles, stats, level, statusOf }) {
   const [ref, focus] = useCenterFocus();
   const complete = stats.owned === stats.total;
+  const mastered = level >= MASTERY_LEVEL;
   return (
     <section
       ref={ref}
       className={`srow ${stats.owned > 0 ? "started" : "untouched"} ${
-        complete ? "mastered" : ""
+        mastered ? "mastered" : ""
       } ${focus ? "infocus" : ""}`}
       style={{ "--accent": `var(--${s.element})` }}
     >
@@ -452,9 +458,15 @@ function SpriteRow({ sprite: s, tiles, stats, statusOf }) {
       <div className="srow-head">
         <h3>
           {s.name}
-          {complete && <Crown />}
+          {mastered && <Crown />}
         </h3>
+        {level > 0 && !mastered && (
+          <span className="lvl" aria-label={`Mastery level ${level}`}>
+            L{level}
+          </span>
+        )}
         <span className={`srow-count ${complete ? "done" : ""}`}>
+          {complete ? "✓ " : ""}
           {stats.owned}/{stats.total}
         </span>
       </div>
@@ -505,6 +517,7 @@ function SpriteRow({ sprite: s, tiles, stats, statusOf }) {
 export default function Home() {
   const [auth, setAuth] = useState({ state: "loading" }); // loading | out | in
   const [collection, setCollection] = useState({ variants: {}, unmapped: [] });
+  const [report, setReport] = useState(null); // slim raw sync, for debugging
   const [lastSync, setLastSync] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [filter, setFilter] = useState("all"); // all | owned | missing
@@ -523,6 +536,7 @@ export default function Home() {
     // account's data can never bleed into another after an account switch.
     const cached = loadStore(accountId);
     setCollection(cached?.collection || { variants: {}, unmapped: [] });
+    setReport(cached?.report || null);
     setLastSync(cached?.lastSync || null);
     return cached;
   }, []);
@@ -534,6 +548,23 @@ export default function Home() {
         const data = await api("/api/sync");
         const next = buildCollection(data.items);
         setCollection(next);
+        // Slim raw snapshot so "Copy sync report" can reveal how Epic
+        // encodes anything the parser doesn't understand yet.
+        setReport({
+          syncedAt: data.syncedAt,
+          profileErrors: data.profileErrors || [],
+          attributes: data.attributes || [],
+          items: (data.items || []).map((i) => {
+            const a = i.attributes || {};
+            const slim = { t: i.templateId, p: i.profileId };
+            if (a.quest_state) slim.q = a.quest_state;
+            if (typeof a.level === "number") slim.l = a.level;
+            if (a.variants) slim.v = a.variants;
+            if (a.premium_rewards?.rewards)
+              slim.r = a.premium_rewards.rewards.map((r) => r.templateId);
+            return slim;
+          }),
+        });
         setLastSync(data.syncedAt);
         if (data.empty) {
           toast("Synced, but Epic returned no Sprite data yet.", true);
@@ -583,8 +614,22 @@ export default function Home() {
   // Persist per account.
   useEffect(() => {
     if (auth.state !== "in") return;
-    saveStore(auth.accountId, { collection, lastSync });
-  }, [collection, lastSync, auth]);
+    saveStore(auth.accountId, { collection, report, lastSync });
+  }, [collection, report, lastSync, auth]);
+
+  async function copyReport() {
+    if (!report) {
+      toast("No sync yet — hit Refresh from Epic first.", true);
+      return;
+    }
+    const text = JSON.stringify(report, null, 1);
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("Sync report copied — paste it to whoever's debugging.");
+    } catch {
+      window.prompt("Copy your sync report:", text);
+    }
+  }
 
   const statusOf = useCallback(
     (slug, variant) => {
@@ -728,6 +773,7 @@ export default function Home() {
                   sprite={s}
                   tiles={tiles}
                   stats={spriteStats[s.slug]}
+                  level={collection.mastery?.[s.slug] || 0}
                   statusOf={statusOf}
                 />
               ))}
@@ -769,6 +815,10 @@ export default function Home() {
             {lastSync
               ? `Synced ${formatAgo(lastSync)} · auto-syncs every 12h — refresh any time`
               : "Not synced yet"}
+            {" · "}
+            <button className="linklike" onClick={copyReport}>
+              Copy sync report
+            </button>
           </div>
         </>
       )}
