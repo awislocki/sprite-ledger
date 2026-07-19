@@ -1,7 +1,14 @@
 // Regression test for the sync → collection parser, driven by a fixture
 // distilled from a real account sync. Run: npm test
 import assert from "node:assert/strict";
-import { buildCollection, countOwned, OWNED, PENDING } from "../lib/collection.js";
+import {
+  buildCollection,
+  countOwned,
+  slimItem,
+  expandSlimItems,
+  OWNED,
+  PENDING,
+} from "../lib/collection.js";
 import { SPRITES, TOTAL_VARIANTS, SLUG_LOOKUP } from "../lib/catalog.js";
 import { fixtureItems, EXPECTED } from "./fixtures/sync-athena-2026-07-19.mjs";
 
@@ -59,6 +66,14 @@ assert.equal(
   "no tokens → nothing invented"
 );
 assert.deepEqual(col.unknownChains, { 22: 1 }, "orphan chain surfaces, not dropped");
+
+// The cached slim report must re-parse to the identical collection — this
+// is what lets parser upgrades apply at load time without a fresh sync.
+assert.deepEqual(
+  buildCollection(expandSlimItems(fixtureItems().map(slimItem))),
+  col,
+  "slim round-trip parses identically"
+);
 
 // Unknown slug surfaces instead of vanishing
 assert.equal(col.unmapped.length, 1);

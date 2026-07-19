@@ -11,6 +11,8 @@ import {
 } from "../lib/catalog.js";
 import {
   buildCollection,
+  slimItem,
+  expandSlimItems,
   OWNED,
   PENDING,
   MASTERY_LEVEL,
@@ -565,8 +567,18 @@ export default function Home() {
   const hydrateFromCache = useCallback((accountId) => {
     // Always overwrite state — resetting on a cache miss guarantees one
     // account's data can never bleed into another after an account switch.
+    // When a raw report is cached, RE-PARSE it with the current parser so
+    // app updates improve the display without waiting for an Epic refresh.
     const cached = loadStore(accountId);
-    setCollection(cached?.collection || { variants: {}, unmapped: [] });
+    let col = cached?.collection || { variants: {}, unmapped: [] };
+    if (cached?.report?.items) {
+      try {
+        col = buildCollection(expandSlimItems(cached.report.items));
+      } catch {
+        // fall back to the stored parse
+      }
+    }
+    setCollection(col);
     setReport(cached?.report || null);
     setLastSync(cached?.lastSync || null);
     return cached;
@@ -579,22 +591,13 @@ export default function Home() {
         const data = await api("/api/sync");
         const next = buildCollection(data.items);
         setCollection(next);
-        // Slim raw snapshot so "Copy sync report" can reveal how Epic
-        // encodes anything the parser doesn't understand yet.
+        // Slim raw snapshot: powers "Copy sync report" and load-time
+        // re-parsing after app updates.
         setReport({
           syncedAt: data.syncedAt,
           profileErrors: data.profileErrors || [],
           attributes: data.attributes || [],
-          items: (data.items || []).map((i) => {
-            const a = i.attributes || {};
-            const slim = { t: i.templateId, p: i.profileId };
-            if (a.quest_state) slim.q = a.quest_state;
-            if (typeof a.level === "number") slim.l = a.level;
-            if (a.variants) slim.v = a.variants;
-            if (a.premium_rewards?.rewards)
-              slim.r = a.premium_rewards.rewards.map((r) => r.templateId);
-            return slim;
-          }),
+          items: (data.items || []).map(slimItem),
         });
         setLastSync(data.syncedAt);
         if (data.empty) {
