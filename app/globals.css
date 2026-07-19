@@ -54,6 +54,10 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   font-variant-numeric: tabular-nums;
 }
 .hud-count small { font-size: 16px; color: var(--slate); font-weight: 600; }
+.hud-count .hud-found {
+  font-size: 15px; font-weight: 600; font-style: normal;
+  color: var(--earth);
+}
 
 /* Signature: extraction meter — one tick per sprite */
 .dustbar { display: flex; gap: 3px; margin-top: 10px; }
@@ -151,10 +155,14 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--dust) 70%, transparent));
 }
 .srow-count {
-  font-family: var(--display); font-size: 13px; font-weight: 700;
+  font-family: var(--display); font-size: 12px; font-weight: 600;
   font-variant-numeric: tabular-nums; color: var(--slate);
+  white-space: nowrap;
 }
-.srow-count.done { color: var(--dust); }
+.srow-count b { font-size: 15px; font-weight: 700; color: var(--ink); }
+.srow-count b.done { color: var(--dust); }
+.srow-count em { font-style: normal; color: color-mix(in srgb, var(--accent) 70%, var(--ink)); }
+.srow-count small { color: var(--slate); }
 
 .vstrip {
   position: relative; z-index: 1;
@@ -174,7 +182,11 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   display: flex; flex-direction: column; align-items: center;
   padding: 5px 3px; border-radius: 12px;
   border: 1px solid var(--line);
+  cursor: pointer; background: transparent;
+  transition: transform 0.1s ease;
 }
+.vtile:active { transform: scale(0.93); }
+.vtile.mastered { cursor: default; }
 .vtile::before {
   content: ""; position: absolute; inset: 0; z-index: 0;
   border-radius: 11px; overflow: hidden;
@@ -203,26 +215,20 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .vtile-img { position: relative; z-index: 1; width: 48px; height: 48px; }
 .vtile-img img { width: 100%; height: 100%; object-fit: contain; }
 
-/* Owned: full-colour variant background, solid accent ring, ✓ badge */
-.vtile.owned {
-  border-color: color-mix(in srgb, var(--accent) 85%, var(--line));
-  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 35%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, white 18%, transparent);
+/* MASTERED: full-colour art, gold ring + crown (highest state). */
+.vtile.mastered {
+  border-color: color-mix(in srgb, var(--dust) 78%, var(--line));
+  box-shadow: 0 0 13px color-mix(in srgb, var(--dust) 42%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, white 20%, transparent);
 }
-.vtile.owned .vtile-img::after {
-  content: "✓"; position: absolute; right: -5px; bottom: -4px;
-  width: 15px; height: 15px; border-radius: 50%;
-  display: grid; place-items: center;
-  background: color-mix(in srgb, var(--accent) 85%, white);
-  color: var(--obsidian);
-  font-size: 10px; font-weight: 800; line-height: 1;
-}
+.vcrown { position: absolute; left: -3px; top: -4px; z-index: 2; }
+.vcrown .crown { width: 18px; height: 13px; }
 
-/* Caught: the creature is owned in-game but its pod style isn't unlocked —
-   full-colour art on a dashed accent ring with a hollow ✓ */
-.vtile.caught {
+/* FOUND: you have it in-game, not mastered — full-colour art, dashed accent
+   ring, hollow ✓. */
+.vtile.found {
   border-style: dashed;
-  border-color: color-mix(in srgb, var(--accent) 75%, var(--line));
+  border-color: color-mix(in srgb, var(--accent) 78%, var(--line));
 }
 .vcaught {
   position: absolute; right: -5px; bottom: -4px; z-index: 2;
@@ -234,47 +240,21 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   font-size: 9px; font-weight: 800; line-height: 1;
 }
 
-/* Missing: flat near-black, dashed outline, ghosted art + lock */
+/* MISSING: flat near-black, dashed outline, ghosted art, tap-to-add "+". */
 .vtile.missing { border-style: dashed; border-color: #2c3550; }
 .vtile.missing::before { filter: grayscale(1) brightness(0.22); }
 .vtile.missing .vtile-img img {
   filter: grayscale(1) brightness(0.45);
-  opacity: 0.75;
+  opacity: 0.7;
 }
 .vlock {
-  position: absolute; right: -2px; bottom: -2px; z-index: 2;
-  font-size: 13px; line-height: 1;
-  filter: grayscale(1) brightness(1.6);
+  position: absolute; right: -4px; bottom: -4px; z-index: 2;
+  width: 15px; height: 15px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--ridge-hi); border: 1px solid var(--line);
+  color: var(--slate); font-size: 12px; font-weight: 700; line-height: 1;
 }
-
-/* Pending: the redeem quest exists but isn't claimed yet */
-.vtile.pending::before { filter: grayscale(0.65) brightness(0.55); }
-.vtile.pending .vtile-img img { filter: grayscale(0.7) brightness(0.65); }
-.vpending {
-  position: absolute; right: 0; bottom: 0; z-index: 2;
-  width: 10px; height: 10px; border-radius: 50%;
-  background: var(--dust);
-  box-shadow: 0 0 6px var(--dust);
-  animation: pulse 1.8s ease-in-out infinite;
-}
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
-
-/* Per-variant mastery: crown at level 5, level chip from L2 up */
-.vcrown {
-  position: absolute; left: -3px; top: -4px; z-index: 2;
-}
-.vcrown .crown { width: 18px; height: 13px; }
-.vtile.vmastered {
-  border-color: color-mix(in srgb, var(--dust) 75%, var(--line));
-  box-shadow: 0 0 12px color-mix(in srgb, var(--dust) 40%, transparent);
-}
-.vlvl {
-  position: absolute; left: -3px; top: -3px; z-index: 2;
-  font-family: var(--display); font-size: 9px; font-weight: 700;
-  color: var(--obsidian);
-  background: var(--dust);
-  border-radius: 5px; padding: 1px 4px;
-}
+.vtile.missing:hover .vlock { color: var(--ink); border-color: var(--slate); }
 
 .dustbar span.part {
   background: linear-gradient(90deg, var(--dust-dim), var(--line));

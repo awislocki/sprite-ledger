@@ -5,7 +5,30 @@ Live at https://sprite-ledger.vercel.app (Vercel project `sprite-ledger`,
 auto-deploys from main). First live sync completed 2026-07-19; the catalog
 below is built from real account data, not guesses.
 
-## Data model (decoded from a real sync, 2026-07-19)
+## Data model — three states (Adam's model, 2026-07-19)
+
+`lib/collection.js` produces per-variant state:
+- **MASTERED** — the pod backbling style only unlocks once a variant is
+  mastered in-game, so the Mastery Pod backpack's `owned` tags ARE the
+  mastered set. Authoritative. Crown.
+- **FOUND** — you have the variant but haven't mastered it. Epic doesn't
+  expose this cleanly, so it's the union of softer auto signals (possessed
+  variant token, claimed redeem reward, caught-creature mastery token)
+  PLUS the user's manual tile toggles. Manual toggles live in their OWN
+  long-term localStorage key (`sprite-ledger:found:<account>`) so re-syncs
+  never wipe them, and are pruned when the variant later masters (MASTERED
+  overwrites FOUND).
+- **MISSING** — neither. Tap a tile to mark it found.
+Tiles are buttons; tapping toggles the manual FOUND layer (mastered tiles
+aren't toggleable). `countMastered`/`countFound` drive the HUD.
+
+`npm run catalog:check` diffs the live fortnite-api pod against
+`lib/catalog.js` and prints new/changed sprites (run ~weekly, not per
+request). Collab sprites (Batman/Vini) award their own backbling and are
+NOT pod variants, so they won't appear there — those need a live sync
+report + local asset extraction.
+
+## Legacy ownership notes (superseded by the three-state model above)
 
 - **Ownership signals** (lib/collection.js, strongest first): (1) owned
   `CosmeticVariantToken:vtid_backpack_coldtrophy_<slug>[_<style>]` items —

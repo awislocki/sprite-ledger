@@ -13,8 +13,7 @@ import {
   buildCollection,
   slimItem,
   expandSlimItems,
-  OWNED,
-  PENDING,
+  countMastered,
 } from "../lib/collection.js";
 import { encodeCode, decodeCode, tradeDiff, ownedKeySet } from "../lib/share.js";
 import { renderShareImage, shareOrDownload } from "../lib/share-image.js";
@@ -31,6 +30,9 @@ const CODE_URL = `https://www.epicgames.com/id/api/redirect?clientId=${EPIC_CLIE
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 const storageKey = (accountId) => `sprite-ledger:v2:${accountId || "local"}`;
+// Manual "found" toggles live in their OWN long-term key so a re-sync or a
+// parser upgrade never wipes them.
+const foundKey = (accountId) => `sprite-ledger:found:${accountId || "local"}`;
 
 function loadStore(accountId) {
   try {
@@ -42,6 +44,19 @@ function loadStore(accountId) {
 function saveStore(accountId, data) {
   try {
     localStorage.setItem(storageKey(accountId), JSON.stringify(data));
+  } catch {}
+}
+function loadFound(accountId) {
+  try {
+    const arr = JSON.parse(localStorage.getItem(foundKey(accountId)));
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+function saveFound(accountId, set) {
+  try {
+    localStorage.setItem(foundKey(accountId), JSON.stringify([...set]));
   } catch {}
 }
 
@@ -428,14 +443,19 @@ function LoginScreen({ onSignedIn, toast }) {
 
 /* ---------------- Share panel ---------------- */
 
-function SharePanel({ collection, displayName, ownedTotal, toast }) {
+function SharePanel({ collection, manualFound, displayName, toast }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(null); // "missing" | "owned" | null
   const [friendCode, setFriendCode] = useState("");
   const [friend, setFriend] = useState(null); // { name, owned: Set }
   const [compareError, setCompareError] = useState(null);
 
-  const mine = useMemo(() => ownedKeySet(collection), [collection]);
+  // Everything you have to trade = mastered + found + your manual toggles.
+  const mine = useMemo(
+    () => ownedKeySet(collection, manualFound),
+    [collection, manualFound]
+  );
+  const ownedTotal = mine.size;
 
   // Warm the browser cache for every variant image as soon as the panel
   // opens — image rendering is then near-instant, which keeps iOS Safari's
@@ -601,19 +621,14 @@ function SharePanel({ collection, displayName, ownedTotal, toast }) {
 
 /* ---------------- Sprite row ---------------- */
 
-function SpriteRow({ sprite: s, tiles, stats, levels, caughtCount, statusOf }) {
+function SpriteRow({ sprite: s, tiles, stats, statusOf, onToggle }) {
   const [ref, focus] = useCenterFocus();
-  const complete = stats.owned === stats.total;
-  // Owned variant creatures (tokens) prove the sprite is caught in-game
-  // even when no pod style is unlocked yet — those rows light up too.
-  const caught = stats.owned > 0 || caughtCount > 0;
-  // stats.owned counts the backbling-present (mastered) styles, so a row
-  // whose owned styles equal its total is fully mastered → gold trim.
-  const allMastered = stats.owned > 0 && stats.owned === stats.total;
+  const have = stats.mastered + stats.found;
+  const allMastered = stats.mastered > 0 && stats.mastered === stats.total;
   return (
     <section
       ref={ref}
-      className={`srow ${caught ? "started" : "untouched"} ${
+      className={`srow ${have > 0 ? "started" : "untouched"} ${
         allMastered ? "mastered" : ""
       } ${focus ? "infocus" : ""}`}
       style={{ "--accent": `var(--${s.element})` }}
@@ -629,42 +644,38 @@ function SpriteRow({ sprite: s, tiles, stats, levels, caughtCount, statusOf }) {
       />
       <div className="srow-head">
         <h3>{s.name}</h3>
-        <span className={`srow-count ${complete ? "done" : ""}`}>
-          {complete ? "✓ " : ""}
-          {stats.owned}/{stats.total}
+        <span className="srow-count">
+          <b className={allMastered ? "done" : ""}>{stats.mastered}</b>
+          <small> mastered</small>
+          {stats.found > 0 && <em> · +{stats.found} found</em>}
+          <small> / {stats.total}</small>
         </span>
-        {caughtCount > Object.keys(levels || {}).length && (
-          <span
-            className="lvl"
-            aria-label="caught variants that couldn't be identified yet"
-          >
-            +{caughtCount - Object.keys(levels || {}).length} caught
-          </span>
-        )}
       </div>
       <div className="vstrip">
         {tiles.map((v) => {
-          const state = statusOf(s.slug, v);
-          // A variant's pod backbling only unlocks once that variant is
-          // MASTERED — so an owned (backbling-present) style IS a mastered
-          // one. (Level isn't in the feed, so we can't rank below 5.)
-          const crowned = state === OWNED;
+          const state = statusOf(s.slug, v); // mastered | found | missing
+          const toggleable = state !== "mastered";
           return (
-            <div
+            <button
               key={v}
-              role="img"
               className={`vtile ${state} vv-${v.toLowerCase()} ${
-                crowned ? "vmastered" : ""
+                state === "mastered" ? "vmastered" : ""
               }`}
-              title={`${v === "Normal" ? "Base" : v}${crowned ? " · mastered" : ""}`}
+              onClick={toggleable ? () => onToggle(s.slug, v) : undefined}
+              aria-pressed={state !== "missing"}
+              title={`${v === "Normal" ? "Base" : v} · ${
+                state === "mastered"
+                  ? "mastered"
+                  : state === "found"
+                  ? "found — tap to unmark"
+                  : "not found — tap to mark"
+              }`}
               aria-label={`${s.name} ${v}: ${
-                state === OWNED
-                  ? "mastered — pod style unlocked"
-                  : state === "caught"
-                  ? "caught in-game — not mastered yet"
-                  : state === PENDING
-                  ? "quest in progress"
-                  : "not owned"
+                state === "mastered"
+                  ? "mastered, pod style unlocked"
+                  : state === "found"
+                  ? "found in-game, not mastered. Tap to unmark."
+                  : "not found. Tap to mark found."
               }`}
             >
               <span className="vtile-img">
@@ -677,24 +688,21 @@ function SpriteRow({ sprite: s, tiles, stats, levels, caughtCount, statusOf }) {
                 />
                 {state === "missing" && (
                   <span className="vlock" aria-hidden="true">
-                    🔒
+                    +
                   </span>
                 )}
-                {state === PENDING && (
-                  <span className="vpending" aria-hidden="true" />
-                )}
-                {state === "caught" && (
+                {state === "found" && (
                   <span className="vcaught" aria-hidden="true">
                     ✓
                   </span>
                 )}
-                {crowned && (
+                {state === "mastered" && (
                   <span className="vcrown" aria-hidden="true">
                     <Crown />
                   </span>
                 )}
               </span>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -706,14 +714,29 @@ function SpriteRow({ sprite: s, tiles, stats, levels, caughtCount, statusOf }) {
 
 export default function Home() {
   const [auth, setAuth] = useState({ state: "loading" }); // loading | out | in
-  const [collection, setCollection] = useState({ variants: {}, unmapped: [] });
+  const EMPTY = { mastered: {}, found: {}, unknownChains: {}, unmapped: [] };
+  const [collection, setCollection] = useState(EMPTY);
+  // Manual on-device "found" toggles: Set of "slug:Variant".
+  const [manualFound, setManualFound] = useState(() => new Set());
   const [report, setReport] = useState(null); // slim raw sync, for debugging
   const [lastSync, setLastSync] = useState(null);
   const [syncing, setSyncing] = useState(false);
-  const [filter, setFilter] = useState("all"); // all | owned | missing
+  const [filter, setFilter] = useState("all"); // all | mastered | missing
   const [toastMsg, setToastMsg] = useState(null);
   const toastTimer = useRef(null);
   const bootSynced = useRef(false);
+
+  // Drop any manual "found" that the sync now reports as mastered — mastered
+  // overwrites the manual flag, per the model.
+  const reconcileManual = useCallback((col, set) => {
+    let changed = false;
+    const next = new Set(set);
+    for (const [slug, vs] of Object.entries(col.mastered || {}))
+      for (const variant of Object.keys(vs)) {
+        if (next.delete(`${slug}:${variant}`)) changed = true;
+      }
+    return changed ? next : set;
+  }, []);
 
   const toast = useCallback((msg, isError = false) => {
     clearTimeout(toastTimer.current);
@@ -727,7 +750,7 @@ export default function Home() {
     // When a raw report is cached, RE-PARSE it with the current parser so
     // app updates improve the display without waiting for an Epic refresh.
     const cached = loadStore(accountId);
-    let col = cached?.collection || { variants: {}, unmapped: [] };
+    let col = cached?.collection || EMPTY;
     if (cached?.report?.items) {
       try {
         col = buildCollection(expandSlimItems(cached.report.items));
@@ -735,11 +758,14 @@ export default function Home() {
         // fall back to the stored parse
       }
     }
+    const found = reconcileManual(col, loadFound(accountId));
     setCollection(col);
+    setManualFound(found);
+    saveFound(accountId, found);
     setReport(cached?.report || null);
     setLastSync(cached?.lastSync || null);
     return cached;
-  }, []);
+  }, [EMPTY, reconcileManual]);
 
   const sync = useCallback(
     async (accountId, { silent = false } = {}) => {
@@ -748,6 +774,11 @@ export default function Home() {
         const data = await api("/api/sync");
         const next = buildCollection(data.items);
         setCollection(next);
+        setManualFound((prev) => {
+          const rec = reconcileManual(next, prev);
+          saveFound(accountId, rec);
+          return rec;
+        });
         // Slim raw snapshot: powers "Copy sync report" and load-time
         // re-parsing after app updates.
         setReport({
@@ -761,15 +792,15 @@ export default function Home() {
         if (data.empty) {
           toast("Synced, but Epic returned no Sprite data yet.", true);
         } else if (!silent) {
-          const owned = ownedKeySet(next).size;
-          toast(`Synced — ${owned} of ${TOTAL_VARIANTS} Sprites owned`);
+          const m = countMastered(next);
+          toast(`Synced — ${m} of ${TOTAL_VARIANTS} Sprites mastered`);
         }
       } catch (err) {
         if (err.status === 401) {
           // Full sign-out reset — leaving the old collection in state would
           // let a different account's next sign-in inherit (and persist) it.
           setAuth({ state: "out" });
-          setCollection({ variants: {}, unmapped: [] });
+          setCollection(EMPTY);
           setLastSync(null);
           bootSynced.current = false;
           toast(err.message === "signed_out" ? "Please sign in." : err.message, true);
@@ -825,13 +856,31 @@ export default function Home() {
 
   const statusOf = useCallback(
     (slug, variant) => {
-      const s = collection.variants[slug]?.[variant];
-      if (s === OWNED) return OWNED;
-      // Creature token exists but the pod style isn't unlocked yet.
-      if (collection.variantLevels?.[slug]?.[variant]) return "caught";
-      return s === PENDING ? PENDING : "missing";
+      if (collection.mastered?.[slug]?.[variant]) return "mastered";
+      if (collection.found?.[slug]?.[variant]) return "found";
+      if (manualFound.has(`${slug}:${variant}`)) return "found";
+      return "missing";
     },
-    [collection]
+    [collection, manualFound]
+  );
+
+  // Tap a tile: toggle a manual "found" flag (mastered tiles aren't
+  // toggleable; auto-found from Epic un-toggles the manual layer only).
+  const toggleFound = useCallback(
+    (slug, variant) => {
+      if (collection.mastered?.[slug]?.[variant]) return;
+      const key = `${slug}:${variant}`;
+      setManualFound((prev) => {
+        const next = new Set(prev);
+        // If Epic already reports it found, a tap just clears any manual add.
+        if (next.has(key)) next.delete(key);
+        else if (collection.found?.[slug]?.[variant]) next.delete(key);
+        else next.add(key);
+        if (auth.accountId) saveFound(auth.accountId, next);
+        return next;
+      });
+    },
+    [collection, auth]
   );
 
   async function signOut() {
@@ -839,7 +888,8 @@ export default function Home() {
       await api("/api/auth/logout");
     } catch {}
     setAuth({ state: "out" });
-    setCollection({ variants: {}, unmapped: [] });
+    setCollection(EMPTY);
+    setManualFound(new Set());
     setLastSync(null);
     bootSynced.current = false;
     toast("Signed out — your Epic access was revoked.");
@@ -849,27 +899,36 @@ export default function Home() {
     const stats = {};
     for (const s of SPRITES) {
       const vs = spriteVariants(s);
-      const owned = vs.filter((v) => statusOf(s.slug, v) === OWNED).length;
-      stats[s.slug] = { owned, total: vs.length };
+      let mastered = 0;
+      let found = 0;
+      for (const v of vs) {
+        const st = statusOf(s.slug, v);
+        if (st === "mastered") mastered++;
+        else if (st === "found") found++;
+      }
+      stats[s.slug] = { mastered, found, total: vs.length };
     }
     return stats;
   }, [statusOf]);
 
-  const ownedTotal = useMemo(
-    () => Object.values(spriteStats).reduce((n, s) => n + s.owned, 0),
+  const masteredTotal = useMemo(
+    () => Object.values(spriteStats).reduce((n, s) => n + s.mastered, 0),
+    [spriteStats]
+  );
+  const foundTotal = useMemo(
+    () => Object.values(spriteStats).reduce((n, s) => n + s.found, 0),
     [spriteStats]
   );
 
-  // Tile-level filtering: "Owned" shows only owned tiles, "Missing" only
-  // tiles you don't own yet (incl. in-progress). Rows with no matching
-  // tiles disappear.
+  // Tile-level filtering: "Mastered" shows only mastered tiles, "Missing"
+  // only tiles you don't have. Rows with no matching tiles disappear.
   const visible = useMemo(
     () =>
       SPRITES.map((s) => {
         const tiles = spriteVariants(s).filter((v) => {
           const st = statusOf(s.slug, v);
-          if (filter === "owned") return st === OWNED;
-          if (filter === "missing") return st !== OWNED;
+          if (filter === "mastered") return st === "mastered";
+          if (filter === "missing") return st === "missing";
           return true;
         });
         return { sprite: s, tiles };
@@ -925,24 +984,29 @@ export default function Home() {
               </button>
             </div>
             <div className="hud-count">
-              {ownedTotal}
-              <small> / {TOTAL_VARIANTS} collected</small>
+              {masteredTotal}
+              <small> / {TOTAL_VARIANTS} mastered</small>
+              {foundTotal > 0 && <em className="hud-found"> · +{foundTotal} found</em>}
             </div>
             <div
               className="dustbar"
-              aria-label={`${ownedTotal} of ${TOTAL_VARIANTS} sprite variants collected`}
+              aria-label={`${masteredTotal} of ${TOTAL_VARIANTS} sprite variants mastered`}
             >
               {SPRITES.map((s) => {
                 const st = spriteStats[s.slug];
                 const cls =
-                  st.owned === st.total ? "lit" : st.owned > 0 ? "part" : "";
+                  st.mastered === st.total
+                    ? "lit"
+                    : st.mastered + st.found > 0
+                    ? "part"
+                    : "";
                 return <span key={s.slug} className={cls} />;
               })}
             </div>
             <div className="chips">
               {[
                 ["all", "All"],
-                ["owned", "Owned"],
+                ["mastered", "Mastered"],
                 ["missing", "Missing"],
               ].map(([f, label]) => (
                 <button
@@ -958,10 +1022,10 @@ export default function Home() {
 
           {visible.length === 0 ? (
             <div className="empty">
-              {filter === "missing" && ownedTotal === TOTAL_VARIANTS
-                ? "Full collection. Go touch grass, Guardian."
-                : filter === "owned"
-                ? "Nothing owned yet — hit Refresh from Epic below."
+              {filter === "missing" && masteredTotal === TOTAL_VARIANTS
+                ? "Every Sprite mastered. Go touch grass, Guardian."
+                : filter === "mastered"
+                ? "Nothing mastered yet — hit Refresh from Epic below."
                 : "Nothing matches this filter."}
             </div>
           ) : (
@@ -972,9 +1036,8 @@ export default function Home() {
                   sprite={s}
                   tiles={tiles}
                   stats={spriteStats[s.slug]}
-                  levels={collection.variantLevels?.[s.slug]}
-                  caughtCount={collection.caught?.[s.slug] || 0}
                   statusOf={statusOf}
+                  onToggle={toggleFound}
                 />
               ))}
             </div>
@@ -985,12 +1048,12 @@ export default function Home() {
             <>
               <div className="section-label">New from Epic — not in catalog yet</div>
               {Object.entries(collection.unknownChains || {}).map(
-                ([chain, lvl]) => (
+                ([chain, count]) => (
                   <div className="raw" key={`chain-${chain}`}>
                     <b>Unreleased sprite — mastery chain q{chain}</b>
                     <div>
-                      level {lvl} · you've caught this one in-game; its pod
-                      styles aren't in Epic's catalog yet
+                      {count} variant{count > 1 ? "s" : ""} caught · this sprite
+                      (a collab?) isn't in the catalog yet
                     </div>
                   </div>
                 )
@@ -999,7 +1062,7 @@ export default function Home() {
                 <div className="raw" key={`${u.templateId}-${i}`}>
                   <b>{u.templateId}</b>
                   <div>
-                    {u.state ? `${u.state} · ` : ""}
+                    {u.note ? `${u.note} · ` : ""}
                     {u.via}
                   </div>
                 </div>
@@ -1009,8 +1072,8 @@ export default function Home() {
 
           <SharePanel
             collection={collection}
+            manualFound={manualFound}
             displayName={auth.displayName}
-            ownedTotal={ownedTotal}
             toast={toast}
           />
 

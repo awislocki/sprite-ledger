@@ -1,282 +1,100 @@
-// Compact fixture distilled from a real /api/sync response (athena profile,
-// 2026-07-19). Each entry: [vtid suffix after "vtid_backpack_coldtrophy_",
-// quest_state]. Account identifiers and item GUIDs stripped.
+// Purpose-built fixture for the three-state parser (mastered / found /
+// missing). Exercises every signal path; expectations in test-collection.mjs.
 //
-// Expected parse (see test-collection.mjs): 47 owned variants of 89 total;
-// The Burnt Peanut complete (1/1); Grim Reaper 0 owned with all 4 pending;
-// Air and Seven entirely unseen.
+// Expected: mastered = { fire: {Normal, Gold} } (2, from backbling tags).
+//           found = { water:{Normal,Gummy}, ghost:{Normal}, seven:{Normal,Gummy} } (5).
+//           Fire Base has both a backbling tag and a mastery token → MASTERED
+//           wins, never double-listed in found.
 
-const REDEEM = [
-  ["water", "Claimed"], ["water_gummy", "Claimed"], ["water_galaxy", "Active"],
-  ["water_gold", "Claimed"], ["water_holofoil", "Claimed"], ["water_gem", "Active"],
-
-  ["earth", "Claimed"], ["earth_gold", "Claimed"], ["earth_gummy", "Claimed"],
-  ["earth_galaxy", "Claimed"], ["earth_gem", "Active"],
-
-  ["fire", "Claimed"], ["fire_galaxy", "Claimed"], ["fire_gold", "Claimed"],
-  ["fire_gummy", "Claimed"], ["fire_holofoil", "Claimed"],
-
-  ["duck", "Claimed"], ["duck_gummy", "Claimed"], ["duck_gold", "Claimed"],
-  ["duck_galaxy", "Active"], ["duck_gem", "Active"],
-
-  ["ghost", "Claimed"], ["ghost_gummy", "Claimed"], ["ghost_gold", "Claimed"],
-  ["ghost_galaxy", "Active"], ["ghost_holofoil", "Claimed"],
-
-  ["reddemon", "Claimed"], ["reddemon_gummy", "Claimed"], ["reddemon_gold", "Claimed"],
-  ["reddemon_galaxy", "Claimed"], ["reddemon_gem", "Active"],
-
-  ["king", "Claimed"], ["king_gold", "Claimed"], ["king_gummy", "Active"],
-  ["king_galaxy", "Active"], ["king_holofoil", "Claimed"],
-
-  ["sleepy", "Claimed"], ["sleepy_gold", "Claimed"], ["sleepy_gummy", "Claimed"],
-  ["sleepy_galaxy", "Active"],
-
-  ["punk", "Claimed"], ["punk_gold", "Active"], ["punk_gummy", "Active"],
-  ["punk_galaxy", "Active"],
-
-  ["crispynut", "Claimed"],
-
-  ["zeropoint", "Claimed"], ["zeropoint_gummy", "Claimed"], ["zeropoint_gold", "Active"],
-  ["zeropoint_galaxy", "Active"], ["zeropoint_gem", "Active"],
-
-  ["fishy", "Claimed"], ["fishy_gummy", "Claimed"], ["fishy_gold", "Claimed"],
-  ["fishy_galaxy", "Claimed"],
-
-  ["soccer", "Claimed"], ["soccer_gummy", "Claimed"], ["soccer_gold", "Claimed"],
-  ["soccer_galaxy", "Active"], ["soccer_holofoil", "Active"],
-
-  ["drifter", "Claimed"], ["drifter_gummy", "Claimed"], ["drifter_gold", "Claimed"],
-  ["drifter_galaxy", "Active"], ["drifter_gem", "Active"],
-
-  ["boss", "Claimed"], ["boss_gold", "Claimed"], ["boss_galaxy", "Claimed"],
-  ["boss_gummy", "Active"],
-
-  ["grimreaper", "Active"], ["grimreaper_gold", "Active"],
-  ["grimreaper_gummy", "Active"], ["grimreaper_galaxy", "Active"],
-];
-
-// 47 from redeem quests + Seven Gold (owned vtid token) + Seven Base
-// (backpack style tag) = 49. The Fire Base backpack tag overlaps a
-// quest-claimed variant and must not double count.
-export const EXPECTED = { owned: 49, pending: 25 };
+export const EXPECTED = { mastered: 2, found: 5 };
 
 export function fixtureItems() {
-  const items = REDEEM.map(([suffix, state], i) => ({
-    itemId: `fixture-${i}`,
-    templateId: `Quest:quest_s41_spritemastery_redeem_fixture_${suffix}`,
-    quantity: 1,
+  const items = [];
+  const push = (o) => items.push({ profileId: "athena", quantity: 1, ...o });
+
+  // Backbling owned tags → MASTERED. Mat0 = empty pod (skip), Mat13 = Fire
+  // Base, Mat14 = Fire Gold. (Namespaced "Mesh.Mat13" must also resolve.)
+  push({
+    itemId: "backpack",
+    templateId: "AthenaBackpack:bid_x_coldtrophy",
     attributes: {
-      quest_state: state,
-      premium_rewards: {
-        rewards: [
-          {
-            templateId: `CosmeticVariantToken:vtid_backpack_coldtrophy_${suffix}`,
-            quantity: 1,
-          },
-        ],
-      },
+      variants: [{ channel: "Mesh", active: "Mat13", owned: ["Mat0", "Mesh.Mat13", "Mat14"] }],
     },
-    profileId: "athena",
-  }));
+  });
 
-  // Season plumbing that must be ignored silently.
-  items.push(
-    {
-      itemId: "noise-1",
-      templateId: "Quest:quest_s41_spritemastery_p01_q01",
-      quantity: 1,
+  // Claimed redeem → FOUND (Water Base). Active redeem → nothing (Water Gold).
+  const redeem = (id, suffix, state) =>
+    push({
+      itemId: id,
+      templateId: `Quest:quest_s41_spritemastery_${id}`,
       attributes: {
-        quest_state: "Claimed",
+        quest_state: state,
         premium_rewards: {
-          rewards: [
-            { templateId: "Token:athena_s41_spritemastery_token_q01", quantity: 1 },
-          ],
+          rewards: [{ templateId: `CosmeticVariantToken:vtid_backpack_coldtrophy_${suffix}` }],
         },
       },
-      profileId: "athena",
-    },
-    {
-      itemId: "noise-2",
-      templateId: "Token:athena_s41_spritemastery_token_q01",
-      quantity: 1,
-      attributes: { level: 1 },
-      profileId: "athena",
-    },
-    {
-      itemId: "noise-3",
-      templateId: "ChallengeBundle:questbundle_s41_bpquests_spritemastery_01",
-      quantity: 1,
-      attributes: {},
-      profileId: "athena",
-    },
-    {
-      itemId: "noise-4",
-      templateId: "ChallengeBundleSchedule:s41_bpquests_spritemastery_schedule_p01",
-      quantity: 1,
-      attributes: {},
-      profileId: "athena",
-    },
-    {
-      itemId: "noise-5",
-      templateId: "Quest:quest_daily_s41_spriteextvendingpurchasegate",
-      quantity: 1,
-      attributes: { quest_state: "Claimed" },
-      profileId: "athena",
-    }
-  );
+    });
+  redeem("redeem_p01_q01", "water", "Claimed");
+  redeem("redeem_p01_q01c", "water_gold", "Active");
 
-  // Variant creatures: one token per owned variant, level on the token.
-  // Chain q01 = Water (seeded): four creatures, all level 1.
-  for (const step of ["", "a", "c", "e"]) {
-    items.push({
-      itemId: `token-water-${step || "base"}`,
-      templateId: `Token:athena_s41_spritemastery_token_q01${step}`,
-      quantity: 1,
-      attributes: { level: 1 },
-      profileId: "athena",
-    });
-  }
-  // Chain q03 = Fire: chain-numbered redeem quests teach the step → variant
-  // mapping ("" = Base, b = Galaxy), and the q03b token at level 5 must
-  // surface as a crowned Fire Galaxy tile.
-  items.push(
-    {
-      itemId: "redeem-fire-base",
-      templateId: "Quest:quest_s41_spritemastery_redeem_p01_q03",
-      quantity: 1,
-      attributes: {
-        quest_state: "Claimed",
-        premium_rewards: {
-          rewards: [
-            {
-              templateId: "CosmeticVariantToken:vtid_backpack_coldtrophy_fire",
-              quantity: 1,
-            },
-          ],
-        },
-      },
-      profileId: "athena",
-    },
-    {
-      itemId: "redeem-fire-galaxy",
-      templateId: "Quest:quest_s41_spritemastery_redeem_p01_q03b",
-      quantity: 1,
-      attributes: {
-        quest_state: "Claimed",
-        premium_rewards: {
-          rewards: [
-            {
-              templateId:
-                "CosmeticVariantToken:vtid_backpack_coldtrophy_fire_galaxy",
-              quantity: 1,
-            },
-          ],
-        },
-      },
-      profileId: "athena",
-    }
-  );
-  for (const [step, level] of [["", 1], ["a", 1], ["b", 5], ["c", 1]]) {
-    items.push({
-      itemId: `token-fire-${step || "base"}`,
-      templateId: `Token:athena_s41_spritemastery_token_q03${step}`,
-      quantity: 1,
-      attributes: { level },
-      profileId: "athena",
-    });
-  }
-  // Seeded-by-elimination chains: q16 = Air (L1), q17 = Seven (L2) —
-  // mirrors the real account, where these chains have progress but no
-  // redeem quests exist yet.
-  for (const t of ["q16", "q17", "q17c"]) {
-    items.push({
-      itemId: `mastery-${t}`,
-      templateId: `Token:athena_s41_spritemastery_token_${t}`,
-      quantity: 1,
-      attributes: { level: 1 },
-      profileId: "athena",
-    });
-  }
-  // Chain q22 maps to nothing at all → must surface as an unknown chain.
-  items.push({
-    itemId: "mastery-q22",
-    templateId: "Token:athena_s41_spritemastery_token_q22",
-    quantity: 1,
+  // Possessed variant token → FOUND (Ghost Base).
+  push({
+    itemId: "vtid-ghost",
+    templateId: "CosmeticVariantToken:vtid_backpack_coldtrophy_ghost",
     attributes: { level: 1 },
-    profileId: "athena",
   });
 
-  // Chain q19 is NOT in the seed — this redeem quest teaches the mapping
-  // (reward names Seven), and its two tokens then count as Seven mastery.
-  items.push({
-    itemId: "redeem-seven",
-    templateId: "Quest:quest_s41_spritemastery_redeem_p03_q19",
-    quantity: 1,
-    attributes: {
-      quest_state: "Active",
-      premium_rewards: {
-        rewards: [
-          {
-            templateId: "CosmeticVariantToken:vtid_backpack_coldtrophy_seven",
-            quantity: 1,
-          },
-        ],
-      },
-    },
-    profileId: "athena",
-  });
-  for (const step of ["", "a"]) {
-    items.push({
-      itemId: `mastery-seven-${step || "base"}`,
-      templateId: `Token:athena_s41_spritemastery_token_q19${step}`,
-      quantity: 1,
+  // Mastery tokens on seeded chain q01 = Water: q01 (Base, dup of the claimed
+  // redeem — no double count), q01a (Gummy) → FOUND.
+  const token = (q) =>
+    push({
+      itemId: `t-${q}`,
+      templateId: `Token:athena_s41_spritemastery_token_${q}`,
       attributes: { level: 1 },
-      profileId: "athena",
     });
-  }
+  token("q01");
+  token("q01a");
 
-  // Directly-owned variant token (granted outside the quest flow — vending,
-  // later phases). This is how sprites like Seven appear when no redeem
-  // quest exists yet; the /sprite/i server filter used to drop these.
-  items.push({
-    itemId: "token-owned-1",
-    templateId: "CosmeticVariantToken:vtid_backpack_coldtrophy_seven_gold",
-    quantity: 1,
-    attributes: { level: 1 },
-    profileId: "athena",
-  });
+  // Fire Base mastery token, but Fire Base is MASTERED (backbling) → superseded.
+  token("q03");
 
-  // The Sprite Mastery Pod backpack with its owned style tags — ground truth
-  // in a second encoding. Mat0 = empty pod (skip), Mesh.Mat13 = Fire Base
-  // (already owned via quest — no double count), Stage26 = Seven Base.
-  items.push({
-    itemId: "backpack-1",
-    templateId: "AthenaBackpack:bid_a1b2_coldtrophy",
-    quantity: 1,
+  // Unknown chain q22 → unknownChains, never invented into a sprite.
+  token("q22");
+
+  // Unseeded chain q19: a redeem names it Seven, so its tokens resolve —
+  // q19 → Seven Base, q19a → Seven Gummy (global letter table).
+  redeem("redeem_p03_q19", "seven", "Active");
+  token("q19");
+  token("q19a");
+
+  // Season plumbing — all ignored.
+  push({
+    itemId: "noise-mastery-quest",
+    templateId: "Quest:quest_s41_spritemastery_p01_q01",
     attributes: {
-      variants: [{ channel: "Mesh", active: "Mat13", owned: ["Mat0", "Mesh.Mat13", "Stage26"] }],
-    },
-    profileId: "athena",
-  });
-
-  // Unknown future slug — must land in `unmapped`, not be dropped.
-  items.push({
-    itemId: "future-1",
-    templateId: "Quest:quest_s41_spritemastery_redeem_fixture_wanderer",
-    quantity: 1,
-    attributes: {
-      quest_state: "Active",
+      quest_state: "Claimed",
       premium_rewards: {
-        rewards: [
-          {
-            templateId:
-              "CosmeticVariantToken:vtid_backpack_coldtrophy_wanderer_gold",
-            quantity: 1,
-          },
-        ],
+        rewards: [{ templateId: "Token:athena_s41_spritemastery_token_q01" }],
       },
     },
-    profileId: "athena",
+  });
+  push({ itemId: "noise-bundle", templateId: "ChallengeBundle:questbundle_x", attributes: {} });
+  push({
+    itemId: "noise-daily",
+    templateId: "Quest:quest_daily_s41_spriteextvendingpurchasegate",
+    attributes: { quest_state: "Claimed" },
+  });
+
+  // Unknown slug in a redeem reward → unmapped, not dropped.
+  push({
+    itemId: "future",
+    templateId: "Quest:quest_s41_spritemastery_redeem_p09_q01",
+    attributes: {
+      quest_state: "Claimed",
+      premium_rewards: {
+        rewards: [{ templateId: "CosmeticVariantToken:vtid_backpack_coldtrophy_wanderer_gold" }],
+      },
+    },
   });
 
   return items;

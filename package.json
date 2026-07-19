@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "dev:mock": "node scripts/dev-mock.mjs",
-    "test": "node scripts/test-collection.mjs"
+    "test": "node scripts/test-collection.mjs",
+    "catalog:check": "node scripts/catalog-check.mjs"
   },
   "dependencies": {
     "next": "15.5.18",
