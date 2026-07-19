@@ -8,7 +8,11 @@ import {
   matchVariant,
 } from "../lib/catalog";
 
-const EPIC_CLIENT_ID = "3446cd72694c4a4485d81b77adbb2141";
+// Must match EPIC_CLIENT_ID in lib/epic.js — the auth code Epic issues here is
+// redeemed with that client's credentials. fortniteAndroidGameClient (Epic
+// disabled the old iOS client in 2026). Override with NEXT_PUBLIC_EPIC_CLIENT_ID.
+const EPIC_CLIENT_ID =
+  process.env.NEXT_PUBLIC_EPIC_CLIENT_ID || "3f69e56c7649492c8cc29f1af08a8a12";
 const LOGIN_URL = "https://www.epicgames.com/id/login";
 const CODE_URL = `https://www.epicgames.com/id/api/redirect?clientId=${EPIC_CLIENT_ID}&responseType=code`;
 
