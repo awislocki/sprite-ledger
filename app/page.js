@@ -199,19 +199,41 @@ function LoginScreen({ onSignedIn, toast }) {
     setDeviceError(null);
   }
 
-  async function submitManual() {
+  async function submitManual(code = paste) {
     setBusy(true);
     setError(null);
     try {
       const data = await api("/api/auth/login", {
-        body: JSON.stringify({ code: paste }),
+        body: JSON.stringify({ code }),
       });
       toast(`Signed in as ${data.displayName}`);
       onSignedIn(data);
     } catch (err) {
       setError(err.message);
-    } finally {
       setBusy(false);
+    }
+  }
+
+  // One tap on phones: read the clipboard, extract the code, sign in — no
+  // tapping into the field and long-press-pasting.
+  async function pasteAndSubmit() {
+    setError(null);
+    let text = "";
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      setError(
+        "Couldn't read your clipboard — paste into the box below and tap Sign in."
+      );
+      return;
+    }
+    if (text) setPaste(text);
+    if (/[0-9a-f]{32}/i.test(text)) {
+      submitManual(text);
+    } else {
+      setError(
+        "No Epic code on your clipboard yet — copy the whole Epic page (step 2) first, then tap Paste."
+      );
     }
   }
 
@@ -321,30 +343,44 @@ function LoginScreen({ onSignedIn, toast }) {
             <li className="step">
               <div className="step-n">3</div>
               <div className="step-body">
-                <h2>Paste it here</h2>
-                <p>Paste the code — or the whole page, we'll find it.</p>
-                <input
-                  value={paste}
-                  onChange={(e) => {
-                    setPaste(e.target.value);
-                    setError(null);
-                  }}
-                  placeholder='{"authorizationCode":"a1b2c3…"}'
-                  autoComplete="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  inputMode="text"
-                />
+                <h2>Come back & tap paste</h2>
+                <p>
+                  On the Epic page just <b>Select All → Copy</b> (grabbing the
+                  whole page is fine — we pick out the code). Then:
+                </p>
+                <button
+                  className="btn-sync paste-btn"
+                  onClick={pasteAndSubmit}
+                  disabled={busy}
+                >
+                  {busy ? "Signing in…" : "📋 Paste code & sign in"}
+                </button>
+                <details className="paste-manual">
+                  <summary>or paste it in a box</summary>
+                  <input
+                    value={paste}
+                    onChange={(e) => {
+                      setPaste(e.target.value);
+                      setError(null);
+                    }}
+                    placeholder='{"authorizationCode":"a1b2c3…"}'
+                    autoComplete="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    inputMode="text"
+                  />
+                  <button
+                    className="btn-step"
+                    onClick={() => submitManual()}
+                    disabled={!hasCode || busy}
+                  >
+                    {busy ? "Signing in…" : "Sign in with pasted code"}
+                  </button>
+                </details>
                 {process.env.NEXT_PUBLIC_MOCK === "1" && (
                   <div className="field-hint">
                     Mock mode is on — use test code{" "}
                     <b>deadbeefdeadbeefdeadbeefdeadbeef</b> (steps 1–2 not needed).
-                  </div>
-                )}
-                {paste && !hasCode && (
-                  <div className="field-hint">
-                    No 32-character code found yet — make sure you copied from
-                    step 2.
                   </div>
                 )}
               </div>
@@ -352,10 +388,6 @@ function LoginScreen({ onSignedIn, toast }) {
           </ol>
 
           {error && <div className="alert" role="alert">{error}</div>}
-
-          <button className="btn-sync" onClick={submitManual} disabled={!hasCode || busy}>
-            {busy ? "Signing in…" : "Sign in & sync"}
-          </button>
 
           <button className="linklike login-switch" onClick={() => setMode("device")}>
             ← Back to one-tap sign in

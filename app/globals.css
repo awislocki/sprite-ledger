@@ -468,6 +468,16 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 }
 .field-hint { font-size: 12px; color: var(--slate); margin-top: 7px; }
 
+.paste-btn { width: 100%; margin-top: 10px; }
+.paste-manual { margin-top: 12px; }
+.paste-manual summary {
+  font-size: 12px; color: var(--slate); cursor: pointer;
+  list-style: none; text-decoration: underline; text-underline-offset: 2px;
+}
+.paste-manual summary::-webkit-details-marker { display: none; }
+.paste-manual input { margin-top: 10px; }
+.paste-manual .btn-step { width: 100%; text-align: center; margin-top: 8px; }
+
 .alert {
   margin-top: 12px; padding: 12px 14px; border-radius: 10px;
   background: color-mix(in srgb, var(--danger) 14%, var(--ridge));

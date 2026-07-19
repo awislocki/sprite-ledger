@@ -171,6 +171,16 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    if (grant === "exchange_code") {
+      // Any exchange code from our own /exchange endpoint is accepted.
+      return json(res, 200, {
+        access_token: "mock-token-" + crypto.randomBytes(8).toString("hex"),
+        account_id: ACCOUNT.id,
+        displayName: ACCOUNT.displayName,
+        expires_in: 7200,
+      });
+    }
+
     if (grant === "device_auth") {
       const da = deviceAuths.get(params.get("device_id"));
       if (
@@ -213,6 +223,15 @@ const server = http.createServer(async (req, res) => {
     return res.end(
       "<h2>Mock Epic</h2><p>Approved automatically — return to the app tab; it'll sign you in.</p>"
     );
+  }
+
+  // --- Exchange code (client handoff: switch token → android token) ---
+  if (req.method === "GET" && path === "/account/api/oauth/exchange") {
+    return json(res, 200, {
+      expiresInSeconds: 300,
+      code: "mock-exchange-" + crypto.randomBytes(8).toString("hex"),
+      creatingClientId: "mock",
+    });
   }
 
   // --- Device auth create / delete ---

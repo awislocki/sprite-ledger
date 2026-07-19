@@ -1,8 +1,8 @@
 import { cookies } from "next/headers";
 import {
   pollDeviceCode,
+  exchangeToClient,
   createDeviceAuth,
-  DEVICE_CLIENT,
   EpicError,
 } from "../../../../../lib/epic";
 import {
@@ -61,14 +61,17 @@ export async function POST(request) {
       );
     }
 
-    const token = result.token;
+    // The device-code (switch) token can't create device auths — exchange it
+    // for an android token, which has that permission, then mint the auth so
+    // it's created and later redeemed by the same (android) client.
+    const token = await exchangeToClient(result.token.access_token, "android");
     const da = await createDeviceAuth(token.access_token, token.account_id);
     const session = {
       d: da.deviceId,
       a: da.accountId,
       s: da.secret,
-      n: token.displayName || "Epic player",
-      c: DEVICE_CLIENT,
+      n: token.displayName || result.token.displayName || "Epic player",
+      c: "android",
     };
 
     const headers = new Headers();
