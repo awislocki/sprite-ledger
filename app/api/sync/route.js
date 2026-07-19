@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 const PROFILE_IDS = ["athena", "collections"];
 
 export async function POST() {
-  const session = openSession(cookies().get(SESSION_COOKIE)?.value);
+  const session = openSession((await cookies()).get(SESSION_COOKIE)?.value);
   if (!session) {
     return Response.json({ error: "signed_out" }, { status: 401 });
   }

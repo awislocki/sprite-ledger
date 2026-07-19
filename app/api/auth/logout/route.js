@@ -9,7 +9,7 @@ import { tokenFromDeviceAuth, deleteDeviceAuth } from "../../../../lib/epic";
 export const dynamic = "force-dynamic";
 
 export async function POST() {
-  const session = openSession(cookies().get(SESSION_COOKIE)?.value);
+  const session = openSession((await cookies()).get(SESSION_COOKIE)?.value);
 
   // Best-effort: revoke the device auth at Epic so nothing lingers server-side.
   if (session) {
