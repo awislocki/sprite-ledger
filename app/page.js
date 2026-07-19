@@ -131,14 +131,75 @@ const Crown = () => (
 /* ---------------- Login screen ---------------- */
 
 function LoginScreen({ onSignedIn, toast }) {
+  const [mode, setMode] = useState("device"); // device | manual
+
+  // Device-code flow
+  const [device, setDevice] = useState(null); // { userCode, verificationUriComplete, ... }
+  const [deviceBusy, setDeviceBusy] = useState(false);
+  const [deviceError, setDeviceError] = useState(null);
+  const pollRef = useRef(null);
+  const deadlineRef = useRef(0);
+  const inFlightRef = useRef(false);
+
+  // Manual auth-code flow
   const [paste, setPaste] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const inputRef = useRef(null);
-
   const hasCode = /[0-9a-f]{32}/i.test(paste);
 
-  async function submit() {
+  const stopPolling = useCallback(() => {
+    clearInterval(pollRef.current);
+    pollRef.current = null;
+  }, []);
+  useEffect(() => stopPolling, [stopPolling]);
+
+  async function startDevice() {
+    setDeviceBusy(true);
+    setDeviceError(null);
+    try {
+      const d = await api("/api/auth/device/start");
+      setDevice(d);
+      deadlineRef.current = Date.now() + (d.expiresIn || 600) * 1000;
+      stopPolling();
+      pollRef.current = setInterval(async () => {
+        if (Date.now() > deadlineRef.current) {
+          stopPolling();
+          setDevice(null);
+          setDeviceError("That sign-in request expired — tap sign in to retry.");
+          return;
+        }
+        // A slow response must not let the next tick fire a second request.
+        if (inFlightRef.current) return;
+        inFlightRef.current = true;
+        try {
+          const r = await api("/api/auth/device/poll");
+          if (r.status === "complete") {
+            stopPolling();
+            toast(`Signed in as ${r.displayName}`);
+            onSignedIn(r);
+          }
+        } catch (err) {
+          stopPolling();
+          setDevice(null);
+          setDeviceError(err.message);
+        } finally {
+          inFlightRef.current = false;
+        }
+      }, Math.max(2, d.interval || 5) * 1000);
+    } catch (err) {
+      setDeviceError(err.message);
+    } finally {
+      setDeviceBusy(false);
+    }
+  }
+
+  function cancelDevice() {
+    stopPolling();
+    setDevice(null);
+    setDeviceError(null);
+  }
+
+  async function submitManual() {
     setBusy(true);
     setError(null);
     try {
@@ -170,92 +231,143 @@ function LoginScreen({ onSignedIn, toast }) {
         </p>
       </div>
 
-      <ol className="steps">
-        <li className="step">
-          <div className="step-n">1</div>
-          <div className="step-body">
-            <h2>Sign in at Epic</h2>
-            <p>
-              Use whatever your Epic account is linked to — PlayStation, Xbox,
-              Nintendo, PC, it all works.
-            </p>
-            <a
-              className="btn-step"
-              href={LOGIN_URL}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open Epic login ↗
-            </a>
-          </div>
-        </li>
-        <li className="step">
-          <div className="step-n">2</div>
-          <div className="step-body">
-            <h2>Get your one-time code</h2>
-            <p>
-              This page shows a short blob of text containing your{" "}
-              <b>authorizationCode</b>. Copy any of it.
-            </p>
-            <a
-              className="btn-step"
-              href={CODE_URL}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Get my code ↗
-            </a>
-          </div>
-        </li>
-        <li className="step">
-          <div className="step-n">3</div>
-          <div className="step-body">
-            <h2>Paste it here</h2>
-            <p>Paste the code — or the whole page, we'll find it.</p>
-            <input
-              ref={inputRef}
-              value={paste}
-              onChange={(e) => {
-                setPaste(e.target.value);
-                setError(null);
-              }}
-              placeholder='{"authorizationCode":"a1b2c3…"}'
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              inputMode="text"
-            />
-            {process.env.NEXT_PUBLIC_MOCK === "1" && (
-              <div className="field-hint">
-                Mock mode is on — use test code{" "}
-                <b>deadbeefdeadbeefdeadbeefdeadbeef</b> (steps 1–2 not needed).
+      {mode === "device" ? (
+        <div className="device">
+          {!device ? (
+            <>
+              <button
+                className="btn-sync"
+                onClick={startDevice}
+                disabled={deviceBusy}
+              >
+                {deviceBusy ? "Starting…" : "Sign in with Epic"}
+              </button>
+              <p className="device-blurb">
+                Opens Epic in a new tab — sign in (PlayStation, Xbox, Nintendo,
+                or PC all work), confirm the code, and you'll land back here
+                signed in. No copy/paste.
+              </p>
+            </>
+          ) : (
+            <div className="device-live">
+              <a
+                className="btn-sync"
+                href={device.verificationUriComplete || device.verificationUri}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open Epic to confirm ↗
+              </a>
+              <div className="device-code" aria-label="Your confirmation code">
+                {device.userCode}
               </div>
-            )}
-            {paste && !hasCode && (
-              <div className="field-hint">
-                No 32-character code found yet — make sure you copied from step
-                2.
+              <p className="device-blurb">
+                On the Epic page, sign in and confirm this code matches. Keep
+                this tab open — it'll sign you in automatically.
+                <span className="device-wait">Waiting for confirmation…</span>
+              </p>
+              <p className="device-warn" role="note">
+                🛡 Only ever confirm a code you started right here. Never enter
+                a code someone sent you — that would sign <b>them</b> into your
+                account.
+              </p>
+              <button className="linklike" onClick={cancelDevice}>
+                Cancel
+              </button>
+            </div>
+          )}
+          {deviceError && (
+            <div className="alert" role="alert">{deviceError}</div>
+          )}
+          <button
+            className="linklike login-switch"
+            onClick={() => {
+              cancelDevice();
+              setMode("manual");
+            }}
+          >
+            Trouble signing in? Enter a code manually
+          </button>
+        </div>
+      ) : (
+        <div className="manual">
+          <ol className="steps">
+            <li className="step">
+              <div className="step-n">1</div>
+              <div className="step-body">
+                <h2>Sign in at Epic</h2>
+                <p>
+                  Use whatever your Epic account is linked to — PlayStation,
+                  Xbox, Nintendo, PC, it all works.
+                </p>
+                <a className="btn-step" href={LOGIN_URL} target="_blank" rel="noreferrer">
+                  Open Epic login ↗
+                </a>
               </div>
-            )}
-          </div>
-        </li>
-      </ol>
+            </li>
+            <li className="step">
+              <div className="step-n">2</div>
+              <div className="step-body">
+                <h2>Get your one-time code</h2>
+                <p>
+                  This page shows a short blob of text containing your{" "}
+                  <b>authorizationCode</b>. Copy any of it.
+                </p>
+                <a className="btn-step" href={CODE_URL} target="_blank" rel="noreferrer">
+                  Get my code ↗
+                </a>
+              </div>
+            </li>
+            <li className="step">
+              <div className="step-n">3</div>
+              <div className="step-body">
+                <h2>Paste it here</h2>
+                <p>Paste the code — or the whole page, we'll find it.</p>
+                <input
+                  value={paste}
+                  onChange={(e) => {
+                    setPaste(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder='{"authorizationCode":"a1b2c3…"}'
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  inputMode="text"
+                />
+                {process.env.NEXT_PUBLIC_MOCK === "1" && (
+                  <div className="field-hint">
+                    Mock mode is on — use test code{" "}
+                    <b>deadbeefdeadbeefdeadbeefdeadbeef</b> (steps 1–2 not needed).
+                  </div>
+                )}
+                {paste && !hasCode && (
+                  <div className="field-hint">
+                    No 32-character code found yet — make sure you copied from
+                    step 2.
+                  </div>
+                )}
+              </div>
+            </li>
+          </ol>
 
-      {error && <div className="alert" role="alert">{error}</div>}
+          {error && <div className="alert" role="alert">{error}</div>}
 
-      <button
-        className="btn-sync"
-        onClick={submit}
-        disabled={!hasCode || busy}
-      >
-        {busy ? "Signing in…" : "Sign in & sync"}
-      </button>
+          <button className="btn-sync" onClick={submitManual} disabled={!hasCode || busy}>
+            {busy ? "Signing in…" : "Sign in & sync"}
+          </button>
+
+          <button className="linklike login-switch" onClick={() => setMode("device")}>
+            ← Back to one-tap sign in
+          </button>
+        </div>
+      )}
 
       <p className="fineprint">
-        Your code is exchanged once, server-side, for a sign-in that's stored
-        encrypted in your own browser — nothing is kept on a server, and no one
-        else can see your account. Sign out any time to revoke it. Fan-made
-        tool, not affiliated with Epic Games. Sprite images via fortnite-api.com.
+        Your sign-in is stored encrypted in your own browser — nothing is kept
+        on a server, and no one else can see your account. Sign out any time to
+        revoke it. Fan-made tool, not affiliated with Epic Games. Sprite images
+        via fortnite-api.com.
       </p>
     </div>
   );

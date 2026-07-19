@@ -400,6 +400,39 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .orb-cluster span:nth-child(3) { animation-delay: 1s; }
 @keyframes bob { 0%,100% { transform: translateY(0);} 50% { transform: translateY(-6px);} }
 
+/* ---- Device-code (seamless) login ---- */
+.device { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.device > .btn-sync, .device-live > .btn-sync { width: 100%; }
+.device-blurb {
+  font-size: 13px; color: var(--slate); line-height: 1.55;
+  text-align: center; margin-top: 10px;
+}
+.device-live {
+  width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px;
+  background: var(--ridge); border: 1px solid var(--line);
+  border-radius: 14px; padding: 16px;
+}
+.device-live .btn-sync { text-align: center; text-decoration: none; }
+.device-code {
+  font-family: var(--display); font-size: 30px; font-weight: 700;
+  letter-spacing: 0.32em; text-indent: 0.32em;
+  color: var(--dust);
+  background: var(--obsidian); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px 18px;
+}
+.device-wait {
+  display: block; margin-top: 8px; color: var(--dust);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.device-warn {
+  font-size: 12px; line-height: 1.5; text-align: left;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--dust) 12%, var(--ridge));
+  border: 1px solid color-mix(in srgb, var(--dust) 40%, var(--line));
+  border-radius: 10px; padding: 10px 12px; width: 100%;
+}
+.login-switch { margin: 14px auto 0; display: block; }
+
 .steps { list-style: none; display: flex; flex-direction: column; gap: 10px; }
 .step {
   display: flex; gap: 12px;

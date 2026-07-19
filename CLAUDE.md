@@ -50,19 +50,30 @@ below is built from real account data, not guesses.
 
 ## Architecture (the parts that aren't obvious)
 
-- **Auth:** Epic's official OAuth can't read Fortnite game data, so sign-in is
-  the community auth-code flow: user pastes a one-time code from
-  epicgames.com/id/api/redirect, server exchanges it, mints a per-account
-  device auth, and seals it AES-256-GCM into an httpOnly cookie
-  (`lib/session.js`). No database; server stores nothing at rest. Console
-  players are covered because Epic's web login offers PS/Xbox/Nintendo.
-- **OAuth client:** fortniteAndroidGameClient — Epic DISABLED the old
-  fortniteIOSGameClient in 2026 (token endpoint returns
-  `errors.com.epicgames.account.client_disabled`). Client id/secret are
-  env-overridable (`EPIC_CLIENT_ID`/`EPIC_CLIENT_SECRET` +
-  `NEXT_PUBLIC_EPIC_CLIENT_ID` for the redirect URL — they must match).
-  Verified fallback clients and a warning about fortnitePCGameClient (lost
-  its device_auth grant — do not use) are documented in `lib/epic.js`.
+- **Auth (two paths, both mint an account device auth sealed AES-256-GCM
+  into an httpOnly cookie; no DB, nothing at rest):**
+  - *Device-code (default, seamless):* `/api/auth/device/start` calls Epic's
+    deviceAuthorization with the **switch** client, seals the device_code
+    into a short `sl_dc` cookie (never sent to the browser), returns the
+    user_code + `epicgames.com/activate?userCode=…` link. The client polls
+    `/api/auth/device/poll` every `interval`s; on confirmation the route
+    mints the device auth and seals the session. UI in LoginScreen.
+  - *Manual auth-code (fallback):* user pastes a one-time code from
+    epicgames.com/id/api/redirect; `/api/auth/login` exchanges it with the
+    **android** client. Behind a "Enter a code manually" toggle.
+  - Each session records which client minted it (`session.c`: "switch" or
+    "android"); `tokenFromDeviceAuth` redeems with that same client so the
+    device auth is never used cross-client. Old sessions without `c` default
+    to android. Console players are covered either way (Epic web login offers
+    PS/Xbox/Nintendo).
+- **OAuth clients** (registry in `lib/epic.js`, all env-overridable):
+  *android* (fortniteAndroidGameClient) for the auth-code path — Epic
+  DISABLED the old fortniteIOSGameClient in 2026
+  (`errors.com.epicgames.account.client_disabled`); *switch*
+  (fortniteNewSwitchGameClient, dashed secret — the only enabled client that
+  supports deviceAuthorization) for the device-code path. Both carry
+  device_auth + Fortnite profile access. Do NOT use fortnitePCGameClient
+  (lost its device_auth grant). Live status: egs.jaren.wtf.
 - **Sign-out** revokes the device auth at Epic (best-effort), clears cookie.
 - **Client** (`app/page.js`): auth state machine; SpriteLocker-style rows —
   one per sprite, variant tiles with owned (full colour + accent ring) /

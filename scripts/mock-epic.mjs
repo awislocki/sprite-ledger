@@ -13,7 +13,9 @@ export const TEST_CODE = "deadbeefdeadbeefdeadbeefdeadbeef";
 
 const usedCodes = new Set();
 const deviceAuths = new Map(); // deviceId -> { accountId, secret }
+const deviceCodes = new Map(); // device_code -> polls seen (approves on 2nd)
 const ACCOUNT = { id: "mock-account-adam", displayName: "TestGuardian" };
+const MOCK_USER_CODE = "WXYZ-1234";
 
 // Mirrors the real profile shape: sprite ownership lives in
 // "spritemastery_redeem" quests whose premium reward is a
@@ -142,6 +144,33 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    if (grant === "client_credentials") {
+      return json(res, 200, {
+        access_token: "mock-cc-" + crypto.randomBytes(8).toString("hex"),
+        expires_in: 14400,
+      });
+    }
+
+    // Device-code flow: pending on the first poll, approved on the second,
+    // so the client's polling loop is exercised end to end.
+    if (grant === "device_code") {
+      const dc = params.get("device_code");
+      const seen = (deviceCodes.get(dc) || 0) + 1;
+      deviceCodes.set(dc, seen);
+      if (seen < 2) {
+        return json(res, 400, {
+          errorCode: "errors.com.epicgames.account.oauth.authorization_pending",
+          errorMessage: "Authorization pending.",
+        });
+      }
+      return json(res, 200, {
+        access_token: "mock-token-" + crypto.randomBytes(8).toString("hex"),
+        account_id: ACCOUNT.id,
+        displayName: ACCOUNT.displayName,
+        expires_in: 7200,
+      });
+    }
+
     if (grant === "device_auth") {
       const da = deviceAuths.get(params.get("device_id"));
       if (
@@ -163,6 +192,27 @@ const server = http.createServer(async (req, res) => {
     }
 
     return json(res, 400, { errorCode: "unsupported_grant", errorMessage: "Unsupported grant." });
+  }
+
+  // --- Device authorization (start of the device-code flow) ---
+  if (req.method === "POST" && path === "/account/api/oauth/deviceAuthorization") {
+    const dc = "mock-dc-" + crypto.randomBytes(8).toString("hex");
+    deviceCodes.set(dc, 0);
+    return json(res, 200, {
+      user_code: MOCK_USER_CODE,
+      device_code: dc,
+      verification_uri: `http://127.0.0.1:${PORT}/mock-activate`,
+      verification_uri_complete: `http://127.0.0.1:${PORT}/mock-activate?userCode=${MOCK_USER_CODE}`,
+      prompt: "login",
+      expires_in: 600,
+      interval: 2,
+    });
+  }
+  if (req.method === "GET" && path === "/mock-activate") {
+    res.writeHead(200, { "Content-Type": "text/html" });
+    return res.end(
+      "<h2>Mock Epic</h2><p>Approved automatically — return to the app tab; it'll sign you in.</p>"
+    );
   }
 
   // --- Device auth create / delete ---

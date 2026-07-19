@@ -46,6 +46,7 @@ export async function POST(request) {
       a: da.accountId,
       s: da.secret,
       n: token.displayName || "Epic player",
+      c: "android", // auth-code flow uses the Android client
     };
     const cookie = sessionSetCookie(sealSession(session));
 
