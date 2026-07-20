@@ -150,6 +150,15 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   filter: drop-shadow(0 1px 6px color-mix(in srgb, var(--accent) 35%, transparent));
 }
 .srow-head h3 .crown { -webkit-text-fill-color: initial; }
+.prov-badge {
+  -webkit-text-fill-color: initial; color: var(--slate);
+  font-family: var(--body); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  transform: skewX(8deg);
+  background: var(--ridge-hi); border: 1px solid var(--line);
+  border-radius: 6px; padding: 2px 6px;
+}
+.srow-hero.provisional { filter: none !important; opacity: 0.5; }
 .crown {
   width: 22px; height: 16px; fill: var(--dust);
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--dust) 70%, transparent));

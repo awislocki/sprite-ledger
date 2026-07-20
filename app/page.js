@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   SPRITES,
+  ALL_SPRITES,
   SLUG_LOOKUP,
   ALL_KEYS,
+  MANUAL_KEYS,
   TOTAL_VARIANTS,
   spriteVariants,
   spriteImage,
@@ -37,7 +39,10 @@ const foundKey = (accountId) => `sprite-ledger:found:${accountId || "local"}`;
 // Stable empty collection — module scope so its identity never changes (a
 // fresh literal in the component body would churn hook dep arrays).
 const EMPTY = Object.freeze({ mastered: {}, found: {}, unknownChains: {}, unmapped: [] });
-const CATALOG_KEYS = new Set(ALL_KEYS);
+
+// Manual override states, in rank order for the tap cycle.
+const RANK = { missing: 0, found: 1, mastered: 2 };
+const CYCLE = ["missing", "found", "mastered"];
 
 function loadStore(accountId) {
   try {
@@ -51,17 +56,20 @@ function saveStore(accountId, data) {
     localStorage.setItem(storageKey(accountId), JSON.stringify(data));
   } catch {}
 }
-function loadFound(accountId) {
+// Manual overrides: { "slug:Variant": "found" | "mastered" }. Migrates the
+// old array-of-found-keys format.
+function loadManual(accountId) {
   try {
-    const arr = JSON.parse(localStorage.getItem(foundKey(accountId)));
-    return new Set(Array.isArray(arr) ? arr : []);
+    const raw = JSON.parse(localStorage.getItem(foundKey(accountId)));
+    if (Array.isArray(raw)) return Object.fromEntries(raw.map((k) => [k, "found"]));
+    return raw && typeof raw === "object" ? raw : {};
   } catch {
-    return new Set();
+    return {};
   }
 }
-function saveFound(accountId, set) {
+function saveManual(accountId, obj) {
   try {
-    localStorage.setItem(foundKey(accountId), JSON.stringify([...set]));
+    localStorage.setItem(foundKey(accountId), JSON.stringify(obj));
   } catch {}
 }
 
@@ -448,7 +456,7 @@ function LoginScreen({ onSignedIn, toast }) {
 
 /* ---------------- Share panel ---------------- */
 
-function SharePanel({ collection, manualFound, displayName, toast }) {
+function SharePanel({ collection, manualKeys, displayName, toast }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(null); // "missing" | "owned" | null
   const [friendCode, setFriendCode] = useState("");
@@ -457,8 +465,8 @@ function SharePanel({ collection, manualFound, displayName, toast }) {
 
   // Everything you have to trade = mastered + found + your manual toggles.
   const mine = useMemo(
-    () => ownedKeySet(collection, manualFound),
-    [collection, manualFound]
+    () => ownedKeySet(collection, manualKeys),
+    [collection, manualKeys]
   );
   const ownedTotal = mine.size;
 
@@ -640,7 +648,7 @@ function SpriteRow({ sprite: s, tiles, stats, tileInfo, onToggle }) {
       style={{ "--accent": `var(--${s.element})` }}
     >
       <img
-        className="srow-hero"
+        className={`srow-hero ${s.provisional ? "provisional" : ""}`}
         src={spriteImage(s)}
         alt=""
         aria-hidden="true"
@@ -649,7 +657,14 @@ function SpriteRow({ sprite: s, tiles, stats, tileInfo, onToggle }) {
         height={196}
       />
       <div className="srow-head">
-        <h3>{s.name}</h3>
+        <h3>
+          {s.name}
+          {s.provisional && (
+            <span className="prov-badge" title="Not in Epic's sync — track it manually">
+              manual
+            </span>
+          )}
+        </h3>
         <span className="srow-count">
           <b className={allMastered ? "done" : ""}>{stats.mastered}</b>
           <small> mastered</small>
@@ -660,14 +675,23 @@ function SpriteRow({ sprite: s, tiles, stats, tileInfo, onToggle }) {
       <div className="vstrip">
         {tiles.map((v) => {
           const { state, source, toggleable } = tileInfo(s.slug, v);
-          const label = `${v === "Normal" ? "Base" : v} · ${
+          const vname = v === "Normal" ? "Base" : v;
+          const nextHint =
+            state === "missing"
+              ? "tap: mark found"
+              : state === "found"
+              ? "tap: mark mastered"
+              : "tap: clear";
+          const label = `${vname} · ${
             state === "mastered"
-              ? "mastered"
-              : source === "auto"
-              ? "found (from Epic)"
-              : source === "manual"
-              ? "found — tap to unmark"
-              : "not found — tap to mark"
+              ? source === "sync"
+                ? "mastered"
+                : `mastered (manual) — ${nextHint}`
+              : state === "found"
+              ? source === "sync"
+                ? "found (from Epic)"
+                : `found — ${nextHint}`
+              : `not found — ${nextHint}`
           }`;
           const Tag = toggleable ? "button" : "div";
           return (
@@ -676,9 +700,8 @@ function SpriteRow({ sprite: s, tiles, stats, tileInfo, onToggle }) {
               role={toggleable ? undefined : "img"}
               className={`vtile ${state} vv-${v.toLowerCase()} ${
                 state === "mastered" ? "vmastered" : ""
-              } ${toggleable ? "tappable" : ""}`}
+              } ${toggleable ? "tappable" : ""} ${s.provisional ? "prov" : ""}`}
               onClick={toggleable ? () => onToggle(s.slug, v) : undefined}
-              {...(toggleable ? { "aria-pressed": state === "found" } : {})}
               title={label}
               aria-label={`${s.name} ${label}`}
             >
@@ -719,30 +742,34 @@ function SpriteRow({ sprite: s, tiles, stats, tileInfo, onToggle }) {
 export default function Home() {
   const [auth, setAuth] = useState({ state: "loading" }); // loading | out | in
   const [collection, setCollection] = useState(EMPTY);
-  // Manual on-device "found" toggles: Set of "slug:Variant".
-  const [manualFound, setManualFound] = useState(() => new Set());
+  // Manual overrides: { "slug:Variant": "found" | "mastered" }.
+  const [manual, setManual] = useState({});
   const [report, setReport] = useState(null); // slim raw sync, for debugging
   const [lastSync, setLastSync] = useState(null);
   const [syncing, setSyncing] = useState(false);
-  const [filter, setFilter] = useState("all"); // all | mastered | missing
+  const [filter, setFilter] = useState("all"); // all | mastered | found | missing
   const [toastMsg, setToastMsg] = useState(null);
   const toastTimer = useRef(null);
   const bootSynced = useRef(false);
 
-  // Drop any manual "found" that the sync now reports as mastered (mastered
-  // overwrites the manual flag) and any key no longer in the catalog (a
-  // removed variant would otherwise be an un-removable phantom).
-  const reconcileManual = useCallback((col, set) => {
+  // Prune manual overrides the sync now covers (sync at or above the manual
+  // rank wins) and any key no longer in the catalog (would be a phantom).
+  const reconcileManual = useCallback((col, obj) => {
     let changed = false;
-    const next = new Set(set);
-    for (const key of set) {
+    const next = { ...obj };
+    for (const [key, val] of Object.entries(obj)) {
       const [slug, variant] = key.split(":");
-      if (col.mastered?.[slug]?.[variant] || !CATALOG_KEYS.has(key)) {
-        next.delete(key);
+      const syncRank = col.mastered?.[slug]?.[variant]
+        ? RANK.mastered
+        : col.found?.[slug]?.[variant]
+        ? RANK.found
+        : RANK.missing;
+      if (!MANUAL_KEYS.has(key) || syncRank >= RANK[val]) {
+        delete next[key];
         changed = true;
       }
     }
-    return changed ? next : set;
+    return changed ? next : obj;
   }, []);
 
   const toast = useCallback((msg, isError = false) => {
@@ -765,10 +792,10 @@ export default function Home() {
         // fall back to the stored parse
       }
     }
-    const found = reconcileManual(col, loadFound(accountId));
+    const m = reconcileManual(col, loadManual(accountId));
     setCollection(col);
-    setManualFound(found);
-    saveFound(accountId, found);
+    setManual(m);
+    saveManual(accountId, m);
     setReport(cached?.report || null);
     setLastSync(cached?.lastSync || null);
     return cached;
@@ -781,9 +808,9 @@ export default function Home() {
         const data = await api("/api/sync");
         const next = buildCollection(data.items);
         setCollection(next);
-        setManualFound((prev) => {
+        setManual((prev) => {
           const rec = reconcileManual(next, prev);
-          saveFound(accountId, rec);
+          saveManual(accountId, rec);
           return rec;
         });
         // Slim raw snapshot: powers "Copy sync report" and load-time
@@ -861,34 +888,41 @@ export default function Home() {
     }
   }
 
-  // { state: mastered|found|missing, source: mastered|auto|manual|none,
-  //   toggleable } — auto (Epic-synced) tiles aren't user-toggleable.
+  // Effective per-variant state = the higher of what Epic synced and what the
+  // user manually set. { state, sync, source, toggleable }.
   const tileInfo = useCallback(
     (slug, variant) => {
-      if (collection.mastered?.[slug]?.[variant])
-        return { state: "mastered", source: "mastered", toggleable: false };
-      if (collection.found?.[slug]?.[variant])
-        return { state: "found", source: "auto", toggleable: false };
-      if (manualFound.has(`${slug}:${variant}`))
-        return { state: "found", source: "manual", toggleable: true };
-      return { state: "missing", source: "none", toggleable: true };
+      const sync = collection.mastered?.[slug]?.[variant]
+        ? "mastered"
+        : collection.found?.[slug]?.[variant]
+        ? "found"
+        : "missing";
+      const man = manual[`${slug}:${variant}`]; // "found"|"mastered"|undefined
+      const state = man && RANK[man] > RANK[sync] ? man : sync;
+      const source = state === sync && sync !== "missing" ? "sync" : man ? "manual" : "none";
+      // Epic-mastered is locked; everything else can be cycled manually.
+      return { state, sync, source, toggleable: sync !== "mastered" };
     },
-    [collection, manualFound]
+    [collection, manual]
   );
   const statusOf = useCallback((slug, variant) => tileInfo(slug, variant).state, [tileInfo]);
 
-  // Tap a toggleable tile: flip its manual "found" flag.
-  const toggleFound = useCallback(
+  // Tap cycles a tile up: missing → found → mastered → back to whatever the
+  // sync floor is (you can never drop below what Epic reports).
+  const cycleTile = useCallback(
     (slug, variant) => {
-      const { toggleable } = tileInfo(slug, variant);
+      const { state, sync, toggleable } = tileInfo(slug, variant);
       if (!toggleable) return;
+      let nextRank = (RANK[state] + 1) % 3;
+      if (nextRank < RANK[sync]) nextRank = RANK[sync];
+      const next = CYCLE[nextRank];
       const key = `${slug}:${variant}`;
-      setManualFound((prev) => {
-        const next = new Set(prev);
-        if (next.has(key)) next.delete(key);
-        else next.add(key);
-        if (auth.accountId) saveFound(auth.accountId, next);
-        return next;
+      setManual((prev) => {
+        const nm = { ...prev };
+        if (RANK[next] <= RANK[sync]) delete nm[key]; // back to the sync floor
+        else nm[key] = next;
+        if (auth.accountId) saveManual(auth.accountId, nm);
+        return nm;
       });
     },
     [tileInfo, auth]
@@ -900,7 +934,7 @@ export default function Home() {
     } catch {}
     setAuth({ state: "out" });
     setCollection(EMPTY);
-    setManualFound(new Set());
+    setManual({});
     setLastSync(null);
     bootSynced.current = false;
     toast("Signed out — your Epic access was revoked.");
@@ -908,7 +942,7 @@ export default function Home() {
 
   const spriteStats = useMemo(() => {
     const stats = {};
-    for (const s of SPRITES) {
+    for (const s of ALL_SPRITES) {
       const vs = spriteVariants(s);
       let mastered = 0;
       let found = 0;
@@ -930,12 +964,19 @@ export default function Home() {
     () => Object.values(spriteStats).reduce((n, s) => n + s.found, 0),
     [spriteStats]
   );
+  const catalogTotal = useMemo(
+    () => ALL_SPRITES.reduce((n, s) => n + spriteVariants(s).length, 0),
+    []
+  );
+  // Everything the user manually marked (found or mastered) — folded into the
+  // share owned-set. Provisional keys just get ignored by the share encoder.
+  const manualKeys = useMemo(() => Object.keys(manual), [manual]);
 
   // Tile-level filtering: "Mastered" shows only mastered tiles, "Missing"
   // only tiles you don't have. Rows with no matching tiles disappear.
   const visible = useMemo(
     () =>
-      SPRITES.map((s) => {
+      ALL_SPRITES.map((s) => {
         const tiles = spriteVariants(s).filter((v) => {
           const st = statusOf(s.slug, v);
           if (filter === "mastered") return st === "mastered";
@@ -946,8 +987,7 @@ export default function Home() {
         return { sprite: s, tiles };
       })
         .filter((row) => row.tiles.length > 0)
-        // Alphabetical display order. (SPRITES/ALL_KEYS keep their catalog
-        // order so share codes stay stable — this sorts the view only.)
+        // Alphabetical display order (view only — catalog order is unchanged).
         .sort((a, b) => a.sprite.name.localeCompare(b.sprite.name)),
     [filter, statusOf]
   );
@@ -997,14 +1037,14 @@ export default function Home() {
             </div>
             <div className="hud-count">
               {masteredTotal}
-              <small> / {TOTAL_VARIANTS} mastered</small>
+              <small> / {catalogTotal} mastered</small>
               {foundTotal > 0 && <em className="hud-found"> · +{foundTotal} found</em>}
             </div>
             <div
               className="dustbar"
-              aria-label={`${masteredTotal} of ${TOTAL_VARIANTS} sprite variants mastered`}
+              aria-label={`${masteredTotal} of ${catalogTotal} sprite variants mastered`}
             >
-              {SPRITES.map((s) => {
+              {ALL_SPRITES.map((s) => {
                 const st = spriteStats[s.slug];
                 const cls =
                   st.mastered === st.total
@@ -1035,7 +1075,7 @@ export default function Home() {
 
           {visible.length === 0 ? (
             <div className="empty">
-              {filter === "missing" && masteredTotal + foundTotal === TOTAL_VARIANTS
+              {filter === "missing" && masteredTotal + foundTotal === catalogTotal
                 ? "Nothing missing — every Sprite is found or mastered."
                 : filter === "mastered"
                 ? "Nothing mastered yet — hit Refresh from Epic below."
@@ -1052,7 +1092,7 @@ export default function Home() {
                   tiles={tiles}
                   stats={spriteStats[s.slug]}
                   tileInfo={tileInfo}
-                  onToggle={toggleFound}
+                  onToggle={cycleTile}
                 />
               ))}
             </div>
@@ -1087,7 +1127,7 @@ export default function Home() {
 
           <SharePanel
             collection={collection}
-            manualFound={manualFound}
+            manualKeys={manualKeys}
             displayName={auth.displayName}
             toast={toast}
           />
