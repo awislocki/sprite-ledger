@@ -648,7 +648,7 @@ function SpriteRow({ sprite: s, tiles, stats, tileInfo, onToggle }) {
       style={{ "--accent": `var(--${s.element})` }}
     >
       <img
-        className={`srow-hero ${s.provisional ? "provisional" : ""}`}
+        className="srow-hero"
         src={spriteImage(s)}
         alt=""
         aria-hidden="true"
@@ -659,7 +659,7 @@ function SpriteRow({ sprite: s, tiles, stats, tileInfo, onToggle }) {
       <div className="srow-head">
         <h3>
           {s.name}
-          {s.provisional && (
+          {s.manualOnly && (
             <span className="prov-badge" title="Not in Epic's sync — track it manually">
               manual
             </span>
@@ -674,13 +674,15 @@ function SpriteRow({ sprite: s, tiles, stats, tileInfo, onToggle }) {
       </div>
       <div className="vstrip">
         {tiles.map((v) => {
-          const { state, source, toggleable } = tileInfo(s.slug, v);
+          const { state, sync, source, toggleable } = tileInfo(s.slug, v);
           const vname = v === "Normal" ? "Base" : v;
           const nextHint =
             state === "missing"
               ? "tap: mark found"
               : state === "found"
               ? "tap: mark mastered"
+              : sync === "found"
+              ? "tap: back to found" // sync floor keeps it found, not cleared
               : "tap: clear";
           const label = `${vname} · ${
             state === "mastered"
@@ -700,7 +702,7 @@ function SpriteRow({ sprite: s, tiles, stats, tileInfo, onToggle }) {
               role={toggleable ? undefined : "img"}
               className={`vtile ${state} vv-${v.toLowerCase()} ${
                 state === "mastered" ? "vmastered" : ""
-              } ${toggleable ? "tappable" : ""} ${s.provisional ? "prov" : ""}`}
+              } ${toggleable ? "tappable" : ""}`}
               onClick={toggleable ? () => onToggle(s.slug, v) : undefined}
               title={label}
               aria-label={`${s.name} ${label}`}
@@ -970,7 +972,12 @@ export default function Home() {
   );
   // Everything the user manually marked (found or mastered) — folded into the
   // share owned-set. Provisional keys just get ignored by the share encoder.
-  const manualKeys = useMemo(() => Object.keys(manual), [manual]);
+  // Only real (shareable) keys reach the share layer — a guard in case a
+  // future manual-only sprite ever sits outside the share set.
+  const manualKeys = useMemo(
+    () => Object.keys(manual).filter((k) => MANUAL_KEYS.has(k)),
+    [manual]
+  );
 
   // Tile-level filtering: "Mastered" shows only mastered tiles, "Missing"
   // only tiles you don't have. Rows with no matching tiles disappear.

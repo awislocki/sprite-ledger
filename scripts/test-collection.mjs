@@ -10,22 +10,19 @@ import {
 } from "../lib/collection.js";
 import {
   SPRITES,
-  ALL_SPRITES,
-  PROVISIONAL_SPRITES,
   MANUAL_KEYS,
   TOTAL_VARIANTS,
   SLUG_LOOKUP,
   ALL_KEYS,
   spriteImage,
-  spriteVariants,
 } from "../lib/catalog.js";
 import { encodeCode, decodeCode, tradeDiff, ownedKeySet } from "../lib/share.js";
 import { fixtureItems, EXPECTED } from "./fixtures/sync-athena-2026-07-19.mjs";
 
 const col = buildCollection(fixtureItems());
 
-// Totals
-assert.equal(TOTAL_VARIANTS, 89, "catalog should carry all 89 variants");
+// Totals (89 pod variants + Batman's 5 + Vini Jr's 1 = 95)
+assert.equal(TOTAL_VARIANTS, 95, "catalog should carry all 95 variants");
 assert.equal(countMastered(col), EXPECTED.mastered, "mastered count");
 assert.equal(countFound(col), EXPECTED.found, "found count");
 
@@ -63,33 +60,36 @@ assert.deepEqual(
   "slim round-trip parses identically"
 );
 
-// Every REAL sprite renders a valid fortnite-api image file per variant
+// Pod sprites use fortnite-api tags; collab (manualOnly) sprites use local
+// /sprites/ images.
 for (const s of SPRITES) {
   for (const [variant, file] of Object.entries(s.variants)) {
-    assert.match(file, /^(mat|stage|particle)\d+$/, `${s.slug}/${variant} image file`);
+    if (s.imgBase) assert.match(file, /^(batman|vinijr)_[a-z]+$/, `${s.slug}/${variant}`);
+    else assert.match(file, /^(mat|stage|particle)\d+$/, `${s.slug}/${variant}`);
   }
 }
 
-// Provisional (collab) sprites: not in ALL_KEYS/share, use the placeholder
-// image, but ARE valid manual-toggle targets.
-assert.equal(ALL_SPRITES.length, SPRITES.length + PROVISIONAL_SPRITES.length);
-assert.ok(PROVISIONAL_SPRITES.length >= 2, "Batman + Vini Jr provisional");
-for (const s of PROVISIONAL_SPRITES) {
-  assert.ok(s.provisional === true);
-  assert.equal(spriteImage(s, "Gold"), "/sprite-tbd.png", "provisional → placeholder");
-  for (const v of spriteVariants(s))
-    assert.ok(MANUAL_KEYS.has(`${s.slug}:${v}`), `${s.slug}:${v} is a manual key`);
-  assert.ok(!ALL_KEYS.includes(`${s.slug}:Normal`), "provisional not in share keys");
-}
-// A real variant is still a manual key (manual master works for real sprites too)
-assert.ok(MANUAL_KEYS.has("punk:Gold"));
+// Batman + Vini Jr are now first-class sprites: real self-hosted images, in
+// the share set, correct variant sets (Batman 5, Vini base-only).
+const batman = SLUG_LOOKUP.batman;
+const vini = SLUG_LOOKUP.vinijr;
+assert.ok(batman?.manualOnly && vini?.manualOnly, "collab sprites flagged manualOnly");
+assert.equal(spriteImage(batman, "Gold"), "/sprites/batman_gold.png");
+assert.equal(spriteImage(vini), "/sprites/vinijr_normal.png");
+assert.deepEqual(Object.keys(batman.variants), ["Normal", "Gold", "Gummy", "Galaxy", "Holofoil"]);
+assert.deepEqual(Object.keys(vini.variants), ["Normal"]);
+// In the share set (unlike the old provisional approach) + manual keys.
+assert.ok(ALL_KEYS.includes("batman:Holofoil") && ALL_KEYS.includes("vinijr:Normal"));
+assert.ok(MANUAL_KEYS.has("batman:Gold") && MANUAL_KEYS.has("punk:Gold"));
 
 // Bit-order freeze: share codes assign bit positions from ALL_KEYS order.
-assert.equal(ALL_KEYS.length, 89, "ALL_KEYS count frozen");
+assert.equal(ALL_KEYS.length, 95, "ALL_KEYS count (89 pod + 6 collab)");
 assert.equal(ALL_KEYS[0], "water:Normal");
 assert.equal(ALL_KEYS[54], "zeropoint:Quack", "pre-Air block boundary");
 assert.equal(ALL_KEYS[55], "air:Normal", "Air starts at bit 55");
-assert.equal(ALL_KEYS[88], "grimreaper:Galaxy", "last key");
+assert.equal(ALL_KEYS[88], "grimreaper:Galaxy", "last pod key — collab appended after");
+assert.equal(ALL_KEYS[89], "batman:Normal", "Batman appended at 89");
+assert.equal(ALL_KEYS[94], "vinijr:Normal", "Vini Jr last");
 
 // Share owned set = mastered ∪ found (+ optional manual keys).
 const mine = ownedKeySet(col);
