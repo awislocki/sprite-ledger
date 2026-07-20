@@ -34,6 +34,11 @@ const storageKey = (accountId) => `sprite-ledger:v2:${accountId || "local"}`;
 // parser upgrade never wipes them.
 const foundKey = (accountId) => `sprite-ledger:found:${accountId || "local"}`;
 
+// Stable empty collection — module scope so its identity never changes (a
+// fresh literal in the component body would churn hook dep arrays).
+const EMPTY = Object.freeze({ mastered: {}, found: {}, unknownChains: {}, unmapped: [] });
+const CATALOG_KEYS = new Set(ALL_KEYS);
+
 function loadStore(accountId) {
   try {
     return JSON.parse(localStorage.getItem(storageKey(accountId))) || null;
@@ -505,7 +510,8 @@ function SharePanel({ collection, manualFound, displayName, toast }) {
   }
 
   async function copyCode() {
-    const code = encodeCode(collection, displayName);
+    // `mine` already folds in the manual toggles.
+    const code = encodeCode(mine, displayName);
     try {
       await navigator.clipboard.writeText(code);
       toast("Collection code copied — send it to a friend.");
@@ -621,7 +627,7 @@ function SharePanel({ collection, manualFound, displayName, toast }) {
 
 /* ---------------- Sprite row ---------------- */
 
-function SpriteRow({ sprite: s, tiles, stats, statusOf, onToggle }) {
+function SpriteRow({ sprite: s, tiles, stats, tileInfo, onToggle }) {
   const [ref, focus] = useCenterFocus();
   const have = stats.mastered + stats.found;
   const allMastered = stats.mastered > 0 && stats.mastered === stats.total;
@@ -653,30 +659,28 @@ function SpriteRow({ sprite: s, tiles, stats, statusOf, onToggle }) {
       </div>
       <div className="vstrip">
         {tiles.map((v) => {
-          const state = statusOf(s.slug, v); // mastered | found | missing
-          const toggleable = state !== "mastered";
+          const { state, source, toggleable } = tileInfo(s.slug, v);
+          const label = `${v === "Normal" ? "Base" : v} · ${
+            state === "mastered"
+              ? "mastered"
+              : source === "auto"
+              ? "found (from Epic)"
+              : source === "manual"
+              ? "found — tap to unmark"
+              : "not found — tap to mark"
+          }`;
+          const Tag = toggleable ? "button" : "div";
           return (
-            <button
+            <Tag
               key={v}
+              role={toggleable ? undefined : "img"}
               className={`vtile ${state} vv-${v.toLowerCase()} ${
                 state === "mastered" ? "vmastered" : ""
-              }`}
+              } ${toggleable ? "tappable" : ""}`}
               onClick={toggleable ? () => onToggle(s.slug, v) : undefined}
-              aria-pressed={state !== "missing"}
-              title={`${v === "Normal" ? "Base" : v} · ${
-                state === "mastered"
-                  ? "mastered"
-                  : state === "found"
-                  ? "found — tap to unmark"
-                  : "not found — tap to mark"
-              }`}
-              aria-label={`${s.name} ${v}: ${
-                state === "mastered"
-                  ? "mastered, pod style unlocked"
-                  : state === "found"
-                  ? "found in-game, not mastered. Tap to unmark."
-                  : "not found. Tap to mark found."
-              }`}
+              {...(toggleable ? { "aria-pressed": state === "found" } : {})}
+              title={label}
+              aria-label={`${s.name} ${label}`}
             >
               <span className="vtile-img">
                 <img
@@ -702,7 +706,7 @@ function SpriteRow({ sprite: s, tiles, stats, statusOf, onToggle }) {
                   </span>
                 )}
               </span>
-            </button>
+            </Tag>
           );
         })}
       </div>
@@ -714,7 +718,6 @@ function SpriteRow({ sprite: s, tiles, stats, statusOf, onToggle }) {
 
 export default function Home() {
   const [auth, setAuth] = useState({ state: "loading" }); // loading | out | in
-  const EMPTY = { mastered: {}, found: {}, unknownChains: {}, unmapped: [] };
   const [collection, setCollection] = useState(EMPTY);
   // Manual on-device "found" toggles: Set of "slug:Variant".
   const [manualFound, setManualFound] = useState(() => new Set());
@@ -726,15 +729,19 @@ export default function Home() {
   const toastTimer = useRef(null);
   const bootSynced = useRef(false);
 
-  // Drop any manual "found" that the sync now reports as mastered — mastered
-  // overwrites the manual flag, per the model.
+  // Drop any manual "found" that the sync now reports as mastered (mastered
+  // overwrites the manual flag) and any key no longer in the catalog (a
+  // removed variant would otherwise be an un-removable phantom).
   const reconcileManual = useCallback((col, set) => {
     let changed = false;
     const next = new Set(set);
-    for (const [slug, vs] of Object.entries(col.mastered || {}))
-      for (const variant of Object.keys(vs)) {
-        if (next.delete(`${slug}:${variant}`)) changed = true;
+    for (const key of set) {
+      const [slug, variant] = key.split(":");
+      if (col.mastered?.[slug]?.[variant] || !CATALOG_KEYS.has(key)) {
+        next.delete(key);
+        changed = true;
       }
+    }
     return changed ? next : set;
   }, []);
 
@@ -765,7 +772,7 @@ export default function Home() {
     setReport(cached?.report || null);
     setLastSync(cached?.lastSync || null);
     return cached;
-  }, [EMPTY, reconcileManual]);
+  }, [reconcileManual]);
 
   const sync = useCallback(
     async (accountId, { silent = false } = {}) => {
@@ -854,33 +861,37 @@ export default function Home() {
     }
   }
 
-  const statusOf = useCallback(
+  // { state: mastered|found|missing, source: mastered|auto|manual|none,
+  //   toggleable } — auto (Epic-synced) tiles aren't user-toggleable.
+  const tileInfo = useCallback(
     (slug, variant) => {
-      if (collection.mastered?.[slug]?.[variant]) return "mastered";
-      if (collection.found?.[slug]?.[variant]) return "found";
-      if (manualFound.has(`${slug}:${variant}`)) return "found";
-      return "missing";
+      if (collection.mastered?.[slug]?.[variant])
+        return { state: "mastered", source: "mastered", toggleable: false };
+      if (collection.found?.[slug]?.[variant])
+        return { state: "found", source: "auto", toggleable: false };
+      if (manualFound.has(`${slug}:${variant}`))
+        return { state: "found", source: "manual", toggleable: true };
+      return { state: "missing", source: "none", toggleable: true };
     },
     [collection, manualFound]
   );
+  const statusOf = useCallback((slug, variant) => tileInfo(slug, variant).state, [tileInfo]);
 
-  // Tap a tile: toggle a manual "found" flag (mastered tiles aren't
-  // toggleable; auto-found from Epic un-toggles the manual layer only).
+  // Tap a toggleable tile: flip its manual "found" flag.
   const toggleFound = useCallback(
     (slug, variant) => {
-      if (collection.mastered?.[slug]?.[variant]) return;
+      const { toggleable } = tileInfo(slug, variant);
+      if (!toggleable) return;
       const key = `${slug}:${variant}`;
       setManualFound((prev) => {
         const next = new Set(prev);
-        // If Epic already reports it found, a tap just clears any manual add.
         if (next.has(key)) next.delete(key);
-        else if (collection.found?.[slug]?.[variant]) next.delete(key);
         else next.add(key);
         if (auth.accountId) saveFound(auth.accountId, next);
         return next;
       });
     },
-    [collection, auth]
+    [tileInfo, auth]
   );
 
   async function signOut() {
@@ -928,6 +939,7 @@ export default function Home() {
         const tiles = spriteVariants(s).filter((v) => {
           const st = statusOf(s.slug, v);
           if (filter === "mastered") return st === "mastered";
+          if (filter === "found") return st === "found";
           if (filter === "missing") return st === "missing";
           return true;
         });
@@ -1007,6 +1019,7 @@ export default function Home() {
               {[
                 ["all", "All"],
                 ["mastered", "Mastered"],
+                ["found", "Found"],
                 ["missing", "Missing"],
               ].map(([f, label]) => (
                 <button
@@ -1022,10 +1035,12 @@ export default function Home() {
 
           {visible.length === 0 ? (
             <div className="empty">
-              {filter === "missing" && masteredTotal === TOTAL_VARIANTS
-                ? "Every Sprite mastered. Go touch grass, Guardian."
+              {filter === "missing" && masteredTotal + foundTotal === TOTAL_VARIANTS
+                ? "Nothing missing — every Sprite is found or mastered."
                 : filter === "mastered"
                 ? "Nothing mastered yet — hit Refresh from Epic below."
+                : filter === "found"
+                ? "Nothing marked found yet — tap a tile to track one."
                 : "Nothing matches this filter."}
             </div>
           ) : (
@@ -1036,7 +1051,7 @@ export default function Home() {
                   sprite={s}
                   tiles={tiles}
                   stats={spriteStats[s.slug]}
-                  statusOf={statusOf}
+                  tileInfo={tileInfo}
                   onToggle={toggleFound}
                 />
               ))}

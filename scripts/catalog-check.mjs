@@ -63,7 +63,17 @@ function suggestEntry(name, variants) {
   return `  { slug: "${slug}", name: "${name}", element: "other", aliases: [],\n    variants: { ${vs} } },`;
 }
 
-const live = parseSprites(await fetchPod());
+let live;
+try {
+  live = parseSprites(await fetchPod());
+  if (!Object.keys(live).length) throw new Error("parsed 0 sprites");
+} catch (err) {
+  console.error(
+    `Couldn't read the live Sprite Mastery Pod: ${err.message}\n` +
+      "fortnite-api may be down or its response shape changed. Try again later."
+  );
+  process.exit(1);
+}
 const known = catalogByName();
 
 const newSprites = [];
