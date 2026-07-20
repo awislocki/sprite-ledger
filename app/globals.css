@@ -215,14 +215,25 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .vtile-img { position: relative; z-index: 1; width: 48px; height: 48px; }
 .vtile-img img { width: 100%; height: 100%; object-fit: contain; }
 
-/* MASTERED: full-colour art, gold ring + crown (highest state). */
+/* MASTERED: full-colour art, gold ring, and a crown in the corner badge
+   slot — on a dark disc so it reads on gold/holofoil/galaxy backgrounds. */
 .vtile.mastered {
   border-color: color-mix(in srgb, var(--dust) 78%, var(--line));
   box-shadow: 0 0 13px color-mix(in srgb, var(--dust) 42%, transparent),
     inset 0 0 0 1px color-mix(in srgb, white 20%, transparent);
 }
-.vcrown { position: absolute; left: -3px; top: -4px; z-index: 2; }
-.vcrown .crown { width: 18px; height: 13px; }
+.vcrown {
+  position: absolute; right: -5px; bottom: -4px; z-index: 2;
+  width: 17px; height: 17px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--obsidian);
+  border: 1.5px solid var(--dust);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--dust) 55%, transparent);
+}
+.vcrown .crown {
+  width: 11px; height: 8px; fill: var(--dust);
+  filter: none;
+}
 
 /* FOUND: you have it in-game, not mastered — full-colour art, dashed accent
    ring, hollow ✓. */
@@ -240,12 +251,15 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   font-size: 9px; font-weight: 800; line-height: 1;
 }
 
-/* MISSING: flat near-black, dashed outline, ghosted art, tap-to-add "+". */
+/* MISSING: pure black & white — neutral tile (no variant colour), the sprite
+   art fully desaturated, dashed outline, tap-to-add "+". */
 .vtile.missing { border-style: dashed; border-color: #2c3550; }
-.vtile.missing::before { filter: grayscale(1) brightness(0.22); }
+.vtile.missing::before {
+  background: linear-gradient(150deg, #2b2f39, #12141b 72%);
+  filter: none;
+}
 .vtile.missing .vtile-img img {
-  filter: grayscale(1) brightness(0.45);
-  opacity: 0.7;
+  filter: grayscale(1) contrast(1.05) brightness(0.95);
 }
 .vlock {
   position: absolute; right: -4px; bottom: -4px; z-index: 2;
