@@ -1066,7 +1066,7 @@ export default function Home() {
               {[
                 ["all", "All"],
                 ["mastered", "Mastered"],
-                ["found", "Found"],
+                ["found", "Not Mastered"],
                 ["missing", "Missing"],
               ].map(([f, label]) => (
                 <button
@@ -1087,7 +1087,7 @@ export default function Home() {
                 : filter === "mastered"
                 ? "Nothing mastered yet — hit Refresh from Epic below."
                 : filter === "found"
-                ? "Nothing marked found yet — tap a tile to track one."
+                ? "Nothing left to master — everything you own is crowned."
                 : "Nothing matches this filter."}
             </div>
           ) : (
