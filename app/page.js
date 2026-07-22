@@ -8,6 +8,7 @@ import {
   ALL_KEYS,
   MANUAL_KEYS,
   TOTAL_VARIANTS,
+  VARIANT_ORDER,
   spriteVariants,
   spriteImage,
 } from "../lib/catalog.js";
@@ -456,12 +457,30 @@ function LoginScreen({ onSignedIn, toast }) {
 
 /* ---------------- Share panel ---------------- */
 
-function SharePanel({ collection, manualKeys, displayName, toast }) {
+function SharePanel({ collection, manualKeys, displayName, toast, initialCompare }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(null); // "missing" | "owned" | null
   const [friendCode, setFriendCode] = useState("");
   const [friend, setFriend] = useState(null); // { name, owned: Set }
   const [compareError, setCompareError] = useState(null);
+  const rootRef = useRef(null);
+
+  // A compare arriving via a shared link (?compare=FMDS1...) — open the
+  // panel, run the trade diff immediately, and bring it on screen.
+  useEffect(() => {
+    if (!initialCompare) return;
+    setOpen(true);
+    setFriendCode(initialCompare);
+    setCompareError(null);
+    try {
+      setFriend(decodeCode(initialCompare));
+    } catch (err) {
+      setCompareError(err.message);
+    }
+    requestAnimationFrame(() =>
+      rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    );
+  }, [initialCompare]);
 
   // Everything you have to trade = mastered + found + your manual toggles.
   const mine = useMemo(
@@ -529,6 +548,32 @@ function SharePanel({ collection, manualKeys, displayName, toast }) {
     }
   }
 
+  // One-tap link: opening it lands the friend straight in the compare view
+  // with this collection pre-loaded.
+  async function shareLink() {
+    const code = encodeCode(mine, displayName);
+    const url = `${window.location.origin}/?compare=${encodeURIComponent(code)}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "FMDS Sprite Tracker",
+          text: `See what you can trade with ${displayName} — opens the compare right away:`,
+          url,
+        });
+        return;
+      } catch (err) {
+        if (err?.name === "AbortError") return;
+        // fall through to clipboard
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast("Compare link copied — whoever opens it sees the trade view.");
+    } catch {
+      window.prompt("Copy your compare link:", url);
+    }
+  }
+
   function runCompare() {
     setCompareError(null);
     setFriend(null);
@@ -568,7 +613,7 @@ function SharePanel({ collection, manualKeys, displayName, toast }) {
     );
 
   return (
-    <div className="share">
+    <div className="share" ref={rootRef}>
       <button className="btn-step share-toggle" onClick={() => setOpen(!open)}>
         {open ? "Close sharing" : "Share with friends"}
       </button>
@@ -581,6 +626,9 @@ function SharePanel({ collection, manualKeys, displayName, toast }) {
             </button>
             <button className="btn-step" disabled={!!busy} onClick={() => makeImage("owned")}>
               {busy === "owned" ? "Rendering…" : "🖼 Owned-list image"}
+            </button>
+            <button className="btn-step" onClick={shareLink}>
+              🔗 Share compare link
             </button>
             <button className="btn-step" onClick={copyCode}>
               📋 Copy my collection code
@@ -739,6 +787,79 @@ function SpriteRow({ sprite: s, tiles, stats, tileInfo, onToggle }) {
   );
 }
 
+/* ---------------- Variant row (group-by-variant view) ---------------- */
+
+// Header accent per variant — matches the vtile gradient palette.
+const VARIANT_ACCENTS = {
+  Normal: "#7e93ad",
+  Gold: "#d4a93f",
+  Gummy: "#f75fae",
+  Galaxy: "#6d4bd8",
+  Gem: "#3fa9e0",
+  Holofoil: "#e8b7d4",
+  Cube: "#8a3df0",
+  Quack: "#ffb347",
+};
+
+// One row per variant style; tiles are display-only (no tap), filled
+// edge-to-edge by the sprite art — colour when owned, B&W when missing.
+function VariantRow({ variant, tiles, stats }) {
+  const vname = variant === "Normal" ? "Base" : variant;
+  const have = stats.mastered + stats.found;
+  const allMastered = stats.mastered > 0 && stats.mastered === stats.total;
+  return (
+    <section
+      className={`srow vrow vv-${variant.toLowerCase()} ${
+        have > 0 ? "started" : "untouched"
+      } ${allMastered ? "mastered" : ""}`}
+      style={{ "--accent": VARIANT_ACCENTS[variant] || "var(--dust)" }}
+    >
+      <div className="srow-head">
+        <h3>{vname}</h3>
+        <span className="srow-count">
+          <b className={allMastered ? "done" : ""}>{stats.mastered}</b>
+          <small> mastered</small>
+          {stats.found > 0 && <em> · +{stats.found} found</em>}
+          <small> / {stats.total}</small>
+        </span>
+      </div>
+      <div className="fstrip">
+        {tiles.map(({ sprite: s, state }) => (
+          <div
+            key={s.slug}
+            role="img"
+            className={`ftile ${state}`}
+            title={`${s.name} — ${state === "missing" ? "not found" : state}`}
+            aria-label={`${s.name} ${vname} — ${
+              state === "missing" ? "not found" : state
+            }`}
+          >
+            <span className="ftile-img">
+              <img
+                src={spriteImage(s, variant)}
+                alt=""
+                loading="lazy"
+                width={72}
+                height={72}
+              />
+            </span>
+            {state === "mastered" && (
+              <span className="vcrown" aria-hidden="true">
+                <Crown />
+              </span>
+            )}
+            {state === "found" && (
+              <span className="vcaught" aria-hidden="true">
+                ✓
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /* ---------------- Ledger ---------------- */
 
 export default function Home() {
@@ -750,9 +871,20 @@ export default function Home() {
   const [lastSync, setLastSync] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [filter, setFilter] = useState("all"); // all | mastered | found | missing
+  const [groupBy, setGroupBy] = useState("sprite"); // sprite | variant
   const [toastMsg, setToastMsg] = useState(null);
   const toastTimer = useRef(null);
   const bootSynced = useRef(false);
+  // A compare code that arrived via a shared link — captured once at boot
+  // (and stripped from the URL) so it survives until sign-in completes.
+  const [pendingCompare, setPendingCompare] = useState(null);
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("compare");
+    if (code) {
+      setPendingCompare(code);
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
 
   // Prune manual overrides the sync now covers (sync at or above the manual
   // rank wins) and any key no longer in the catalog (would be a phantom).
@@ -999,6 +1131,32 @@ export default function Home() {
     [filter, statusOf]
   );
 
+  // Group-by-variant view: one row per style, a tile per sprite that has it.
+  // Same tile-level filtering as the sprite view; stats count the full row so
+  // "3 mastered / 18" stays true even when the filter hides tiles.
+  const variantRows = useMemo(() => {
+    if (groupBy !== "variant") return [];
+    const sprites = [...ALL_SPRITES].sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+    return VARIANT_ORDER.map((variant) => {
+      const tiles = [];
+      let mastered = 0;
+      let found = 0;
+      let total = 0;
+      for (const s of sprites) {
+        if (!s.variants[variant]) continue;
+        total++;
+        const st = statusOf(s.slug, variant);
+        if (st === "mastered") mastered++;
+        else if (st === "found") found++;
+        if (filter !== "all" && st !== filter) continue;
+        tiles.push({ sprite: s, state: st });
+      }
+      return { variant, tiles, stats: { mastered, found, total } };
+    }).filter((row) => row.tiles.length > 0);
+  }, [groupBy, filter, statusOf]);
+
   /* ---------- render ---------- */
 
   if (auth.state === "loading") {
@@ -1047,21 +1205,6 @@ export default function Home() {
               <small> / {catalogTotal} mastered</small>
               {foundTotal > 0 && <em className="hud-found"> · +{foundTotal} found</em>}
             </div>
-            <div
-              className="dustbar"
-              aria-label={`${masteredTotal} of ${catalogTotal} sprite variants mastered`}
-            >
-              {ALL_SPRITES.map((s) => {
-                const st = spriteStats[s.slug];
-                const cls =
-                  st.mastered === st.total
-                    ? "lit"
-                    : st.mastered + st.found > 0
-                    ? "part"
-                    : "";
-                return <span key={s.slug} className={cls} />;
-              })}
-            </div>
             <div className="chips">
               {[
                 ["all", "All"],
@@ -1077,10 +1220,20 @@ export default function Home() {
                   {label}
                 </button>
               ))}
+              <span className="chip-divider" aria-hidden="true" />
+              <button
+                className={`chip ${groupBy === "variant" ? "on" : ""}`}
+                aria-pressed={groupBy === "variant"}
+                onClick={() =>
+                  setGroupBy(groupBy === "variant" ? "sprite" : "variant")
+                }
+              >
+                By variant
+              </button>
             </div>
           </header>
 
-          {visible.length === 0 ? (
+          {(groupBy === "variant" ? variantRows : visible).length === 0 ? (
             <div className="empty">
               {filter === "missing" && masteredTotal + foundTotal === catalogTotal
                 ? "Nothing missing — every Sprite is found or mastered."
@@ -1089,6 +1242,17 @@ export default function Home() {
                 : filter === "found"
                 ? "Nothing left to master — everything you own is crowned."
                 : "Nothing matches this filter."}
+            </div>
+          ) : groupBy === "variant" ? (
+            <div className="rows">
+              {variantRows.map(({ variant, tiles, stats }) => (
+                <VariantRow
+                  key={variant}
+                  variant={variant}
+                  tiles={tiles}
+                  stats={stats}
+                />
+              ))}
             </div>
           ) : (
             <div className="rows">
@@ -1137,6 +1301,7 @@ export default function Home() {
             manualKeys={manualKeys}
             displayName={auth.displayName}
             toast={toast}
+            initialCompare={pendingCompare}
           />
 
           <div className="syncbar">

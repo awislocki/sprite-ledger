@@ -59,19 +59,6 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   color: var(--earth);
 }
 
-/* Signature: extraction meter — one tick per sprite */
-.dustbar { display: flex; gap: 3px; margin-top: 10px; }
-.dustbar span {
-  flex: 1; height: 7px; border-radius: 2px;
-  background: var(--line);
-  transform: skewX(-18deg);
-  transition: background 0.3s ease;
-}
-.dustbar span.lit {
-  background: linear-gradient(90deg, var(--dust-dim), var(--dust));
-  box-shadow: 0 0 6px rgba(232, 192, 105, 0.35);
-}
-
 /* ---------- Filter chips ---------- */
 .chips { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0 4px; scrollbar-width: none; }
 .chips::-webkit-scrollbar { display: none; }
@@ -83,6 +70,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   background: var(--ridge);
 }
 .chip.on { color: var(--obsidian); background: var(--dust); border-color: var(--dust); }
+.chip-divider { flex: none; width: 1px; align-self: stretch; margin: 4px 2px; background: var(--line); }
 
 /* ---------- Sprite rows (one per sprite, variant tiles inside) ---------- */
 .rows { display: flex; flex-direction: column; gap: 10px; padding: 10px 0 20px; }
@@ -204,10 +192,10 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   transition: filter 0.3s ease;
 }
 /* Base gets a light steel-blue so it reads against the card background */
-.vtile.vv-normal   { --vbg: linear-gradient(150deg, #b9c9dd, #7e93ad 55%, #4d5f78); }
-.vtile.vv-gold     { --vbg: linear-gradient(150deg, #f6e09a, #d4a93f 45%, #7c5f1c); }
-.vtile.vv-gummy    { --vbg: linear-gradient(150deg, #ffb3e0, #f75fae 55%, #a52c6d); }
-.vtile.vv-galaxy   {
+.vv-normal   { --vbg: linear-gradient(150deg, #b9c9dd, #7e93ad 55%, #4d5f78); }
+.vv-gold     { --vbg: linear-gradient(150deg, #f6e09a, #d4a93f 45%, #7c5f1c); }
+.vv-gummy    { --vbg: linear-gradient(150deg, #ffb3e0, #f75fae 55%, #a52c6d); }
+.vv-galaxy   {
   --vbg:
     radial-gradient(circle at 18% 22%, rgba(255,255,255,0.95) 0 1px, transparent 2.5px),
     radial-gradient(circle at 68% 14%, rgba(255,255,255,0.8) 0 1px, transparent 2px),
@@ -217,10 +205,10 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
     radial-gradient(circle at 60% 40%, #6d4bd8 0%, transparent 60%),
     linear-gradient(150deg, #43307e, #241a49 60%, #120d2b);
 }
-.vtile.vv-gem      { --vbg: conic-gradient(from 210deg at 55% 38%, #b8ecff, #3fa9e0 22%, #8fd4f5 38%, #2a6fa8 58%, #b8ecff 76%, #4db4e8); }
-.vtile.vv-holofoil { --vbg: conic-gradient(from 140deg at 50% 50%, #ffd9e8, #d9fff3 25%, #d9e8ff 50%, #fff3d9 75%, #ffd9e8); }
-.vtile.vv-cube     { --vbg: linear-gradient(150deg, #8a3df0, #4a1e8e 55%, #1c0b38), radial-gradient(circle at 50% 60%, #c26bff 0%, transparent 70%); }
-.vtile.vv-quack    { --vbg: linear-gradient(150deg, #ffe08a, #ffb347 55%, #d97e1f); }
+.vv-gem      { --vbg: conic-gradient(from 210deg at 55% 38%, #b8ecff, #3fa9e0 22%, #8fd4f5 38%, #2a6fa8 58%, #b8ecff 76%, #4db4e8); }
+.vv-holofoil { --vbg: conic-gradient(from 140deg at 50% 50%, #ffd9e8, #d9fff3 25%, #d9e8ff 50%, #fff3d9 75%, #ffd9e8); }
+.vv-cube     { --vbg: linear-gradient(150deg, #8a3df0, #4a1e8e 55%, #1c0b38), radial-gradient(circle at 50% 60%, #c26bff 0%, transparent 70%); }
+.vv-quack    { --vbg: linear-gradient(150deg, #ffe08a, #ffb347 55%, #d97e1f); }
 
 .vtile-img { position: relative; z-index: 1; width: 48px; height: 48px; }
 .vtile-img img { width: 100%; height: 100%; object-fit: contain; }
@@ -280,9 +268,44 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 }
 .vtile.missing:hover .vlock { color: var(--ink); border-color: var(--slate); }
 
-.dustbar span.part {
-  background: linear-gradient(90deg, var(--dust-dim), var(--line));
+/* ---------- Group-by-variant view ---------- */
+/* One row per style; the sprite GRAPHICS fill the row container — big art,
+   hero-style, no tile chrome (no borders, no squares). Colour = owned,
+   black & white = missing. Display-only: no cursor, no tap states. */
+.vrow .srow-head h3 { transform: skewX(-8deg); }
+/* The row container wears the variant's own style — the same gradient the
+   small tiles use, laid over the card and dimmed so heads/art stay legible. */
+.vrow { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.vrow::before {
+  content: ""; position: absolute; inset: 0; z-index: 0;
+  background: var(--vbg);
+  opacity: 0.28;
+  pointer-events: none;
 }
+.vrow.vv-galaxy::before, .vrow.vv-cube::before { opacity: 0.55; }
+.fstrip {
+  position: relative; z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 4px;
+  padding: 8px 0 2px;
+}
+.ftile { position: relative; aspect-ratio: 1; }
+.ftile-img { position: absolute; inset: 0; }
+.ftile-img img {
+  display: block; width: 100%; height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+}
+.ftile.mastered .ftile-img img {
+  filter: drop-shadow(0 0 16px color-mix(in srgb, var(--dust) 45%, transparent));
+}
+.ftile.missing .ftile-img img {
+  filter: grayscale(1) contrast(1.05) brightness(0.55);
+  opacity: 0.8;
+}
+.ftile .vcrown { right: 6px; bottom: 6px; }
+.ftile .vcaught { right: 6px; bottom: 6px; }
 
 /* ---------- Sections / misc ---------- */
 .section-label {
