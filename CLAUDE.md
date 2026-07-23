@@ -24,9 +24,16 @@ aren't toggleable). `countMastered`/`countFound` drive the HUD.
 
 `npm run catalog:check` diffs the live fortnite-api pod against
 `lib/catalog.js` and prints new/changed sprites (run ~weekly, not per
-request). Collab sprites (Batman/Vini) award their own backbling and are
-NOT pod variants, so they won't appear there — those need a live sync
-report + local asset extraction.
+request). Collab sprites (Batman/Vini/Pollo) award their own backbling and
+are NOT pod variants, so they won't appear there — those need a live sync
+report + local asset extraction. fortnite-api can also LAG in-game pod
+releases (Cube Grim, released 2026-07-23, wasn't there day-of): a variant
+file starting with "/" (e.g. "/sprites/grimreaper_cube") is a self-hosted
+per-variant image override — swap it to the real pod tag once
+catalog:check reports it. Renders for unsynced art come from the Fortnite
+wiki (fortnite.fandom.com, MediaWiki API; fortnite.gg blocks scripts) and
+get re-framed to pod occupancy (alpha-crop, scale to 78% content height,
+center on 288px canvas — see the batman re-pad commit).
 
 ## Legacy ownership notes (superseded by the three-state model above)
 
@@ -133,6 +140,12 @@ report + local asset extraction.
 - Next.js is pinned at 14.2.5, flagged by the Dec 2025 security advisory
   (27 Dependabot alerts). Dependabot PR #1 bumps to 15.5.18 (major) — being
   evaluated in a separate session; don't merge blind.
-- Air and Seven sprite slugs unverified until they appear in a live sync.
+- Air and Seven sprite slugs unverified until they appear in a live sync;
+  same for Pollo (added 2026-07-23, base-only Mythic).
+- grimreaper Cube uses a self-hosted image override until fortnite-api adds
+  the pod file, and its Epic style tag is unknown until a sync sees it.
+- The 2026-07-23 catalog change (Cube Grim/Cube Batman inserted, Pollo
+  appended) rolled the share-code checksum — pre-07-23 codes now get the
+  friendly "different version" error.
 - `vercel.json` pins framework=nextjs (project was imported with preset
   "Other"; the pin overrides it).

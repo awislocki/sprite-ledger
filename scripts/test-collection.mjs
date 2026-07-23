@@ -21,8 +21,8 @@ import { fixtureItems, EXPECTED } from "./fixtures/sync-athena-2026-07-19.mjs";
 
 const col = buildCollection(fixtureItems());
 
-// Totals (89 pod variants + Batman's 5 + Vini Jr's 1 = 95)
-assert.equal(TOTAL_VARIANTS, 95, "catalog should carry all 95 variants");
+// Totals (90 pod variants + Batman's 6 + Vini Jr's 1 + Pollo's 1 = 98)
+assert.equal(TOTAL_VARIANTS, 98, "catalog should carry all 98 variants");
 assert.equal(countMastered(col), EXPECTED.mastered, "mastered count");
 assert.equal(countFound(col), EXPECTED.found, "found count");
 
@@ -60,14 +60,22 @@ assert.deepEqual(
   "slim round-trip parses identically"
 );
 
-// Pod sprites use fortnite-api tags; collab (manualOnly) sprites use local
-// /sprites/ images.
+// Pod sprites use fortnite-api tags (or a "/sprites/..." self-hosted override
+// for styles fortnite-api doesn't carry yet); collab (manualOnly) sprites use
+// local /sprites/ images.
 for (const s of SPRITES) {
   for (const [variant, file] of Object.entries(s.variants)) {
-    if (s.imgBase) assert.match(file, /^(batman|vinijr)_[a-z]+$/, `${s.slug}/${variant}`);
-    else assert.match(file, /^(mat|stage|particle)\d+$/, `${s.slug}/${variant}`);
+    if (s.imgBase) assert.match(file, /^(batman|vinijr|pollo)_[a-z]+$/, `${s.slug}/${variant}`);
+    else
+      assert.match(
+        file,
+        /^(mat|stage|particle)\d+$|^\/sprites\/[a-z_]+$/,
+        `${s.slug}/${variant}`
+      );
   }
 }
+// The self-hosted override resolves to a local png, not IMG_BASE.
+assert.equal(spriteImage(SLUG_LOOKUP.grim, "Cube"), "/sprites/grimreaper_cube.png");
 
 // Batman + Vini Jr are now first-class sprites: real self-hosted images, in
 // the share set, correct variant sets (Batman 5, Vini base-only).
@@ -76,20 +84,27 @@ const vini = SLUG_LOOKUP.vinijr;
 assert.ok(batman?.manualOnly && vini?.manualOnly, "collab sprites flagged manualOnly");
 assert.equal(spriteImage(batman, "Gold"), "/sprites/batman_gold.png");
 assert.equal(spriteImage(vini), "/sprites/vinijr_normal.png");
-assert.deepEqual(Object.keys(batman.variants), ["Normal", "Gold", "Gummy", "Galaxy", "Holofoil"]);
+assert.deepEqual(Object.keys(batman.variants), ["Normal", "Gold", "Gummy", "Galaxy", "Holofoil", "Cube"]);
 assert.deepEqual(Object.keys(vini.variants), ["Normal"]);
+assert.deepEqual(Object.keys(SLUG_LOOKUP.pollo.variants), ["Normal"]);
+assert.ok(SLUG_LOOKUP.pollo.manualOnly, "Pollo tracked manually until synced");
 // In the share set (unlike the old provisional approach) + manual keys.
 assert.ok(ALL_KEYS.includes("batman:Holofoil") && ALL_KEYS.includes("vinijr:Normal"));
 assert.ok(MANUAL_KEYS.has("batman:Gold") && MANUAL_KEYS.has("punk:Gold"));
 
 // Bit-order freeze: share codes assign bit positions from ALL_KEYS order.
-assert.equal(ALL_KEYS.length, 95, "ALL_KEYS count (89 pod + 6 collab)");
+// 2026-07-23 snapshot: Cube Grim + Cube Batman + Pollo inserted/appended —
+// the catalog checksum changed, so pre-07-23 codes get the friendly
+// "different version" error (by design).
+assert.equal(ALL_KEYS.length, 98, "ALL_KEYS count (90 pod + 8 collab)");
 assert.equal(ALL_KEYS[0], "water:Normal");
 assert.equal(ALL_KEYS[54], "zeropoint:Quack", "pre-Air block boundary");
 assert.equal(ALL_KEYS[55], "air:Normal", "Air starts at bit 55");
-assert.equal(ALL_KEYS[88], "grimreaper:Galaxy", "last pod key — collab appended after");
-assert.equal(ALL_KEYS[89], "batman:Normal", "Batman appended at 89");
-assert.equal(ALL_KEYS[94], "vinijr:Normal", "Vini Jr last");
+assert.equal(ALL_KEYS[89], "grimreaper:Cube", "last pod key — collab appended after");
+assert.equal(ALL_KEYS[90], "batman:Normal", "Batman appended at 90");
+assert.equal(ALL_KEYS[95], "batman:Cube", "Batman Cube closes the Batman block");
+assert.equal(ALL_KEYS[96], "vinijr:Normal");
+assert.equal(ALL_KEYS[97], "pollo:Normal", "Pollo last");
 
 // Share owned set = mastered ∪ found (+ optional manual keys).
 const mine = ownedKeySet(col);
