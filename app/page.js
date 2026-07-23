@@ -1200,10 +1200,21 @@ export default function Home() {
                 {auth.displayName} · Sign out
               </button>
             </div>
-            <div className="hud-count">
-              {masteredTotal}
-              <small> / {catalogTotal} mastered</small>
-              {foundTotal > 0 && <em className="hud-found"> · +{foundTotal} found</em>}
+            <div className="hud-countrow">
+              <div className="hud-count">
+                {masteredTotal}
+                <small> / {catalogTotal} mastered</small>
+                {foundTotal > 0 && <em className="hud-found"> · +{foundTotal} found</em>}
+              </div>
+              <button
+                className={`chip group-toggle ${groupBy === "variant" ? "on" : ""}`}
+                aria-pressed={groupBy === "variant"}
+                onClick={() =>
+                  setGroupBy(groupBy === "variant" ? "sprite" : "variant")
+                }
+              >
+                By variant
+              </button>
             </div>
             <div className="chips">
               {[
@@ -1220,16 +1231,6 @@ export default function Home() {
                   {label}
                 </button>
               ))}
-              <span className="chip-divider" aria-hidden="true" />
-              <button
-                className={`chip ${groupBy === "variant" ? "on" : ""}`}
-                aria-pressed={groupBy === "variant"}
-                onClick={() =>
-                  setGroupBy(groupBy === "variant" ? "sprite" : "variant")
-                }
-              >
-                By variant
-              </button>
             </div>
           </header>
 

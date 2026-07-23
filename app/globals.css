@@ -70,7 +70,14 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   background: var(--ridge);
 }
 .chip.on { color: var(--obsidian); background: var(--dust); border-color: var(--dust); }
-.chip-divider { flex: none; width: 1px; align-self: stretch; margin: 4px 2px; background: var(--line); }
+
+/* Grouping toggle rides the count row (the chips row scrolls and would
+   clip it on phones). */
+.hud-countrow {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px;
+}
+.group-toggle { flex: none; }
 
 /* ---------- Sprite rows (one per sprite, variant tiles inside) ---------- */
 .rows { display: flex; flex-direction: column; gap: 10px; padding: 10px 0 20px; }
