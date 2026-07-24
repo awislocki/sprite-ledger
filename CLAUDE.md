@@ -17,7 +17,12 @@ below is built from real account data, not guesses.
   PLUS the user's manual tile toggles. Manual toggles live in their OWN
   long-term localStorage key (`sprite-ledger:found:<account>`) so re-syncs
   never wipe them, and are pruned when the variant later masters (MASTERED
-  overwrites FOUND).
+  overwrites FOUND). Because mobile Safari evicts script-writable storage
+  after ~7 days without a visit, every save also refreshes a 400-day
+  SERVER-SET backup cookie (`sl_manual`, /api/manual — Set-Cookie is exempt
+  from that eviction; nothing stored server-side) and loadManual falls back
+  to it when the localStorage key is absent. navigator.storage.persist() is
+  requested at boot as an extra hedge.
 - **MISSING** — neither. Tap a tile to mark it found.
 Tiles are buttons; tapping cycles missing → found → mastered → missing.
 The manual layer stores whatever differs from the sync, INCLUDING an

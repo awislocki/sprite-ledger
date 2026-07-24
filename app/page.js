@@ -60,19 +60,60 @@ function saveStore(accountId, data) {
 // Manual overrides: { "slug:Variant": "missing" | "found" | "mastered" }
 // ("missing" = suppress a wrong Epic auto-found signal). Migrates the old
 // array-of-found-keys format.
+//
+// Durability: localStorage is script-writable storage, which mobile Safari
+// evicts after ~7 days without a visit — silently wiping the toggles. So
+// every save also refreshes a long-lived SERVER-SET backup cookie (exempt
+// from that eviction; see /api/manual — nothing is stored server-side), and
+// loads fall back to it whenever the localStorage key is gone entirely.
+const MANUAL_CODES = { m: "missing", f: "found", M: "mastered" };
+
+function readManualBackup(accountId) {
+  try {
+    const m = document.cookie.match(/(?:^|;\s*)sl_manual=([^;]*)/);
+    if (!m) return null;
+    const [ver, acct, pairs = ""] = decodeURIComponent(m[1]).split(".");
+    if (ver !== "v1" || acct !== accountId) return null;
+    const obj = {};
+    for (const p of pairs ? pairs.split("~") : []) {
+      const [key, code] = p.split("=");
+      if (key && MANUAL_CODES[code]) obj[key] = MANUAL_CODES[code];
+    }
+    return obj;
+  } catch {
+    return null;
+  }
+}
+
 function loadManual(accountId) {
   try {
-    const raw = JSON.parse(localStorage.getItem(foundKey(accountId)));
+    const stored = localStorage.getItem(foundKey(accountId));
+    if (stored === null) {
+      // Key absent (fresh device or evicted storage) — not merely empty.
+      const backup = readManualBackup(accountId);
+      if (backup) return backup;
+    }
+    const raw = JSON.parse(stored);
     if (Array.isArray(raw)) return Object.fromEntries(raw.map((k) => [k, "found"]));
     return raw && typeof raw === "object" ? raw : {};
   } catch {
     return {};
   }
 }
+
+let backupTimer = null;
 function saveManual(accountId, obj) {
   try {
     localStorage.setItem(foundKey(accountId), JSON.stringify(obj));
   } catch {}
+  if (!accountId) return;
+  // Debounced fire-and-forget: mid-cycle taps collapse into one refresh.
+  clearTimeout(backupTimer);
+  backupTimer = setTimeout(() => {
+    api("/api/manual", {
+      body: JSON.stringify({ accountId, manual: obj }),
+    }).catch(() => {});
+  }, 800);
 }
 
 async function api(path, opts = {}) {
@@ -1009,6 +1050,9 @@ export default function Home() {
       try {
         const me = await api("/api/auth/me", { method: "GET" });
         setAuth({ state: "in", ...me });
+        // Ask the browser not to evict our storage (best-effort; Chrome and
+        // Android honor it readily, Safari mostly for home-screen apps).
+        navigator.storage?.persist?.().catch(() => {});
         const cached = hydrateFromCache(me.accountId);
         if (!bootSynced.current) {
           bootSynced.current = true;
