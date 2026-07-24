@@ -19,8 +19,13 @@ below is built from real account data, not guesses.
   never wipe them, and are pruned when the variant later masters (MASTERED
   overwrites FOUND).
 - **MISSING** — neither. Tap a tile to mark it found.
-Tiles are buttons; tapping toggles the manual FOUND layer (mastered tiles
-aren't toggleable). `countMastered`/`countFound` drive the HUD.
+Tiles are buttons; tapping cycles missing → found → mastered → missing.
+The manual layer stores whatever differs from the sync, INCLUDING an
+explicit "missing" that suppresses a wrong Epic auto-found signal (the
+soft heuristics — chain-seed guesses like Air/Seven — can misfire; a user
+reported Galaxy Air found that they don't have, 2026-07-24). Suppressed
+keys are subtracted from the share owned-set. Only Epic-MASTERED is
+locked (authoritative). `countMastered`/`countFound` drive the HUD.
 
 `npm run catalog:check` diffs the live fortnite-api pod against
 `lib/catalog.js` and prints new/changed sprites (run ~weekly, not per

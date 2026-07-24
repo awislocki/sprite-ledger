@@ -57,8 +57,9 @@ function saveStore(accountId, data) {
     localStorage.setItem(storageKey(accountId), JSON.stringify(data));
   } catch {}
 }
-// Manual overrides: { "slug:Variant": "found" | "mastered" }. Migrates the
-// old array-of-found-keys format.
+// Manual overrides: { "slug:Variant": "missing" | "found" | "mastered" }
+// ("missing" = suppress a wrong Epic auto-found signal). Migrates the old
+// array-of-found-keys format.
 function loadManual(accountId) {
   try {
     const raw = JSON.parse(localStorage.getItem(foundKey(accountId)));
@@ -457,7 +458,14 @@ function LoginScreen({ onSignedIn, toast }) {
 
 /* ---------------- Share panel ---------------- */
 
-function SharePanel({ collection, manualKeys, displayName, toast, initialCompare }) {
+function SharePanel({
+  collection,
+  manualKeys,
+  suppressedKeys,
+  displayName,
+  toast,
+  initialCompare,
+}) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(null); // "missing" | "owned" | null
   const [friendCode, setFriendCode] = useState("");
@@ -482,11 +490,13 @@ function SharePanel({ collection, manualKeys, displayName, toast, initialCompare
     );
   }, [initialCompare]);
 
-  // Everything you have to trade = mastered + found + your manual toggles.
-  const mine = useMemo(
-    () => ownedKeySet(collection, manualKeys),
-    [collection, manualKeys]
-  );
+  // Everything you have to trade = mastered + found + manual raises, MINUS
+  // tiles you explicitly marked not-possessed over a wrong Epic signal.
+  const mine = useMemo(() => {
+    const set = ownedKeySet(collection, manualKeys);
+    for (const k of suppressedKeys || []) set.delete(k);
+    return set;
+  }, [collection, manualKeys, suppressedKeys]);
   const ownedTotal = mine.size;
 
   // Warm the browser cache for every variant image as soon as the panel
@@ -730,7 +740,7 @@ function SpriteRow({ sprite: s, tiles, stats, tileInfo, onToggle }) {
               : state === "found"
               ? "tap: mark mastered"
               : sync === "found"
-              ? "tap: back to found" // sync floor keeps it found, not cleared
+              ? "tap: mark not found" // suppress the Epic signal
               : "tap: clear";
           const label = `${vname} · ${
             state === "mastered"
@@ -739,8 +749,10 @@ function SpriteRow({ sprite: s, tiles, stats, tileInfo, onToggle }) {
                 : `mastered (manual) — ${nextHint}`
               : state === "found"
               ? source === "sync"
-                ? "found (from Epic)"
+                ? `found (from Epic) — ${nextHint}`
                 : `found — ${nextHint}`
+              : source === "manual"
+              ? `not found (overriding Epic) — ${nextHint}`
               : `not found — ${nextHint}`
           }`;
           const Tag = toggleable ? "button" : "div";
@@ -865,7 +877,10 @@ function VariantRow({ variant, tiles, stats }) {
 export default function Home() {
   const [auth, setAuth] = useState({ state: "loading" }); // loading | out | in
   const [collection, setCollection] = useState(EMPTY);
-  // Manual overrides: { "slug:Variant": "found" | "mastered" }.
+  // Manual overrides: { "slug:Variant": "missing" | "found" | "mastered" }.
+  // "missing" SUPPRESSES an Epic "found" signal — the auto-found heuristics
+  // (chain-seed guesses like Air/Seven) can be wrong, so users can force a
+  // tile back to not-possessed. Epic-mastered stays locked (authoritative).
   const [manual, setManual] = useState({});
   const [report, setReport] = useState(null); // slim raw sync, for debugging
   const [lastSync, setLastSync] = useState(null);
@@ -886,8 +901,10 @@ export default function Home() {
     }
   }, []);
 
-  // Prune manual overrides the sync now covers (sync at or above the manual
-  // rank wins) and any key no longer in the catalog (would be a phantom).
+  // Prune manual overrides that no longer do anything: keys gone from the
+  // catalog, anything on an Epic-mastered tile (locked, authoritative), and
+  // overrides that now MATCH the sync state (a raise the sync caught up to,
+  // or a "missing" suppression on a tile Epic no longer calls found).
   const reconcileManual = useCallback((col, obj) => {
     let changed = false;
     const next = { ...obj };
@@ -898,7 +915,11 @@ export default function Home() {
         : col.found?.[slug]?.[variant]
         ? RANK.found
         : RANK.missing;
-      if (!MANUAL_KEYS.has(key) || syncRank >= RANK[val]) {
+      if (
+        !MANUAL_KEYS.has(key) ||
+        syncRank === RANK.mastered ||
+        syncRank === RANK[val]
+      ) {
         delete next[key];
         changed = true;
       }
@@ -1022,8 +1043,9 @@ export default function Home() {
     }
   }
 
-  // Effective per-variant state = the higher of what Epic synced and what the
-  // user manually set. { state, sync, source, toggleable }.
+  // Effective per-variant state: Epic-mastered always wins (authoritative);
+  // otherwise a manual override — raise OR "missing" suppression — beats the
+  // sync's soft signals. { state, sync, source, toggleable }.
   const tileInfo = useCallback(
     (slug, variant) => {
       const sync = collection.mastered?.[slug]?.[variant]
@@ -1031,9 +1053,14 @@ export default function Home() {
         : collection.found?.[slug]?.[variant]
         ? "found"
         : "missing";
-      const man = manual[`${slug}:${variant}`]; // "found"|"mastered"|undefined
-      const state = man && RANK[man] > RANK[sync] ? man : sync;
-      const source = state === sync && sync !== "missing" ? "sync" : man ? "manual" : "none";
+      const man = manual[`${slug}:${variant}`]; // "missing"|"found"|"mastered"|undefined
+      const state = sync === "mastered" ? sync : man || sync;
+      const source =
+        man && state === man && man !== sync
+          ? "manual"
+          : state !== "missing"
+          ? "sync"
+          : "none";
       // Epic-mastered is locked; everything else can be cycled manually.
       return { state, sync, source, toggleable: sync !== "mastered" };
     },
@@ -1041,19 +1068,19 @@ export default function Home() {
   );
   const statusOf = useCallback((slug, variant) => tileInfo(slug, variant).state, [tileInfo]);
 
-  // Tap cycles a tile up: missing → found → mastered → back to whatever the
-  // sync floor is (you can never drop below what Epic reports).
+  // Tap cycles the full loop: missing → found → mastered → missing. An
+  // override is stored only where it differs from the sync — including an
+  // explicit "missing" that suppresses a wrong Epic "found" signal. Only
+  // Epic-mastered can't be cycled.
   const cycleTile = useCallback(
     (slug, variant) => {
       const { state, sync, toggleable } = tileInfo(slug, variant);
       if (!toggleable) return;
-      let nextRank = (RANK[state] + 1) % 3;
-      if (nextRank < RANK[sync]) nextRank = RANK[sync];
-      const next = CYCLE[nextRank];
+      const next = CYCLE[(RANK[state] + 1) % 3];
       const key = `${slug}:${variant}`;
       setManual((prev) => {
         const nm = { ...prev };
-        if (RANK[next] <= RANK[sync]) delete nm[key]; // back to the sync floor
+        if (next === sync) delete nm[key]; // matches Epic again → no override
         else nm[key] = next;
         if (auth.accountId) saveManual(auth.accountId, nm);
         return nm;
@@ -1102,12 +1129,21 @@ export default function Home() {
     () => ALL_SPRITES.reduce((n, s) => n + spriteVariants(s).length, 0),
     []
   );
-  // Everything the user manually marked (found or mastered) — folded into the
-  // share owned-set. Provisional keys just get ignored by the share encoder.
-  // Only real (shareable) keys reach the share layer — a guard in case a
-  // future manual-only sprite ever sits outside the share set.
+  // Manual raises (found/mastered) fold INTO the share owned-set; "missing"
+  // suppressions are carried separately so the share layer can subtract the
+  // Epic signal they override. Only real catalog keys reach the share layer.
   const manualKeys = useMemo(
-    () => Object.keys(manual).filter((k) => MANUAL_KEYS.has(k)),
+    () =>
+      Object.entries(manual)
+        .filter(([k, v]) => MANUAL_KEYS.has(k) && v !== "missing")
+        .map(([k]) => k),
+    [manual]
+  );
+  const suppressedKeys = useMemo(
+    () =>
+      Object.entries(manual)
+        .filter(([k, v]) => MANUAL_KEYS.has(k) && v === "missing")
+        .map(([k]) => k),
     [manual]
   );
 
@@ -1300,6 +1336,7 @@ export default function Home() {
           <SharePanel
             collection={collection}
             manualKeys={manualKeys}
+            suppressedKeys={suppressedKeys}
             displayName={auth.displayName}
             toast={toast}
             initialCompare={pendingCompare}
