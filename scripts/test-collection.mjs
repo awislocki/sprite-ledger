@@ -17,6 +17,12 @@ import {
   spriteImage,
 } from "../lib/catalog.js";
 import { encodeCode, decodeCode, tradeDiff, ownedKeySet } from "../lib/share.js";
+import {
+  encodeManual,
+  decodeManual,
+  isAccountId,
+  MAX_COOKIE_BYTES,
+} from "../lib/manual.js";
 import { fixtureItems, EXPECTED } from "./fixtures/sync-athena-2026-07-19.mjs";
 
 const col = buildCollection(fixtureItems());
@@ -127,7 +133,48 @@ const wrapped = decodeCode(`here's my code: ${code}. hit me up`);
 assert.deepEqual([...wrapped.owned].sort(), [...mine].sort(), "code inside prose");
 assert.throws(() => decodeCode(code.slice(0, code.length - 4)), /different version|cut off/);
 
+/* ---- Manual-toggle backup codec (the durable-persistence cookie) ---- */
+
+const ACCT = "abc123";
+const toggles = {
+  "air:Galaxy": "missing", // suppresses a wrong Epic auto-found
+  "punk:Gold": "found",
+  "batman:Cube": "mastered",
+};
+const encoded = encodeManual(ACCT, toggles);
+assert.deepEqual(decodeManual(encoded, ACCT), toggles, "backup round-trips");
+// Stable output for a given map — that's what lets the client skip no-op
+// network writes without ever skipping a real change.
+assert.equal(encodeManual(ACCT, { ...toggles }), encoded, "encoding is stable");
+assert.notEqual(
+  encodeManual(ACCT, { ...toggles, "punk:Gold": "mastered" }),
+  encoded,
+  "a changed state changes the payload"
+);
+// Never hand one account another's toggles.
+assert.equal(decodeManual(encoded, "someoneelse"), null, "account-scoped");
+// Junk in → nothing out (never throw, never invent keys).
+assert.equal(decodeManual("garbage", ACCT), null);
+assert.equal(decodeManual(undefined, ACCT), null);
+assert.deepEqual(decodeManual(`v1.${ACCT}.`, ACCT), {}, "empty payload decodes");
+assert.deepEqual(
+  decodeManual(`v1.${ACCT}.notakey=f~air:Galaxy=m~punk:Gold=zzz`, ACCT),
+  { "air:Galaxy": "missing" },
+  "unknown keys and codes are dropped"
+);
+assert.deepEqual(encodeManual(ACCT, { "notakey:Gold": "found" }), `v1.${ACCT}.`);
+// A cookie over ~4KB is dropped SILENTLY by the browser — the whole backup
+// would vanish. Even every catalog key at once must stay under the cap.
+const everyKey = Object.fromEntries(ALL_KEYS.map((k) => [k, "mastered"]));
+assert.ok(
+  encodeManual(ACCT, everyKey).length <= MAX_COOKIE_BYTES,
+  "a fully-toggled catalog still fits the cookie budget"
+);
+assert.deepEqual(decodeManual(encodeManual(ACCT, everyKey), ACCT), everyKey);
+assert.ok(isAccountId(ACCT) && !isAccountId("bad.id") && !isAccountId(""));
+
 console.log(
   `ok — ${countMastered(col)} mastered, ${countFound(col)} found, ` +
-    `${col.unmapped.length} unmapped, ${SPRITES.length} sprites, code ${code.length} chars`
+    `${col.unmapped.length} unmapped, ${SPRITES.length} sprites, code ${code.length} chars, ` +
+    `backup ${encodeManual(ACCT, everyKey).length}/${MAX_COOKIE_BYTES}B worst case`
 );

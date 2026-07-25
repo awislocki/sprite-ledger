@@ -20,9 +20,22 @@ below is built from real account data, not guesses.
   overwrites FOUND). Because mobile Safari evicts script-writable storage
   after ~7 days without a visit, every save also refreshes a 400-day
   SERVER-SET backup cookie (`sl_manual`, /api/manual — Set-Cookie is exempt
-  from that eviction; nothing stored server-side) and loadManual falls back
-  to it when the localStorage key is absent. navigator.storage.persist() is
-  requested at boot as an extra hedge.
+  from that eviction; nothing stored server-side). The cookie is httpOnly
+  and scoped to `path=/api/manual`, so it never rides along on page loads,
+  sprite images, or /api/sync; the client reads it back via GET. Codec +
+  4KB-budget guard live in `lib/manual.js` (unit-tested; worst case — every
+  catalog key toggled — is ~1.4KB). Restore fires only when localStorage
+  holds NOTHING for the account (evicted / fresh device / storage blocked),
+  never when it holds an empty map (the user may have cleared toggles on
+  purpose), and merges UNDER any tap made while the request was in flight.
+  navigator.storage.persist() is requested at boot as an extra hedge.
+- **reconcileManual takes `{trusted}` — do not remove it.** Pruning decides
+  an override is redundant by comparing it to the sync; against an EMPTY
+  (unsynced) collection every tile reads as missing, so a "missing"
+  suppression looks redundant and gets deleted — which is exactly the state
+  right after an eviction restore, and it wiped the user's toggles *and*
+  the backup (fixed 2026-07-25). Only a live sync or a cached collection is
+  trusted; a cold cache prunes nothing but off-catalog keys.
 - **MISSING** — neither. Tap a tile to mark it found.
 Tiles are buttons; tapping cycles missing → found → mastered → missing.
 The manual layer stores whatever differs from the sync, INCLUDING an

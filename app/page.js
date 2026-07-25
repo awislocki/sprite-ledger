@@ -19,6 +19,7 @@ import {
   countMastered,
 } from "../lib/collection.js";
 import { encodeCode, decodeCode, tradeDiff, ownedKeySet } from "../lib/share.js";
+import { encodeManual } from "../lib/manual.js";
 import { renderShareImage, shareOrDownload } from "../lib/share-image.js";
 
 // Must match EPIC_CLIENT_ID in lib/epic.js — the auth code Epic issues here is
@@ -66,53 +67,65 @@ function saveStore(accountId, data) {
 // every save also refreshes a long-lived SERVER-SET backup cookie (exempt
 // from that eviction; see /api/manual — nothing is stored server-side), and
 // loads fall back to it whenever the localStorage key is gone entirely.
-const MANUAL_CODES = { m: "missing", f: "found", M: "mastered" };
-
-function readManualBackup(accountId) {
+// Returns { manual, hadKey }. hadKey=false means local storage holds NOTHING
+// for this account — evicted, a fresh device, or storage is unavailable
+// (Safari private mode throws) — which is when the server-side backup is
+// worth restoring. An empty-but-present map is NOT a miss: the user may have
+// deliberately cleared every toggle, and restoring over that would resurrect
+// them.
+function loadManual(accountId) {
+  let stored = null;
   try {
-    const m = document.cookie.match(/(?:^|;\s*)sl_manual=([^;]*)/);
-    if (!m) return null;
-    const [ver, acct, pairs = ""] = decodeURIComponent(m[1]).split(".");
-    if (ver !== "v1" || acct !== accountId) return null;
-    const obj = {};
-    for (const p of pairs ? pairs.split("~") : []) {
-      const [key, code] = p.split("=");
-      if (key && MANUAL_CODES[code]) obj[key] = MANUAL_CODES[code];
-    }
-    return obj;
+    stored = localStorage.getItem(foundKey(accountId));
+  } catch {
+    return { manual: {}, hadKey: false }; // storage blocked → treat as a miss
+  }
+  if (stored === null) return { manual: {}, hadKey: false };
+  try {
+    const raw = JSON.parse(stored);
+    if (Array.isArray(raw))
+      return { manual: Object.fromEntries(raw.map((k) => [k, "found"])), hadKey: true };
+    return { manual: raw && typeof raw === "object" ? raw : {}, hadKey: true };
+  } catch {
+    return { manual: {}, hadKey: true }; // corrupt JSON — don't clobber it
+  }
+}
+
+// Restore from the durable cookie (see /api/manual). Returns null when there
+// is no usable backup, so callers can tell "nothing there" from "empty".
+async function restoreManualBackup(accountId) {
+  try {
+    const { manual } = await api(
+      `/api/manual?accountId=${encodeURIComponent(accountId)}`,
+      { method: "GET" }
+    );
+    return manual && Object.keys(manual).length ? manual : null;
   } catch {
     return null;
   }
 }
 
-function loadManual(accountId) {
-  try {
-    const stored = localStorage.getItem(foundKey(accountId));
-    if (stored === null) {
-      // Key absent (fresh device or evicted storage) — not merely empty.
-      const backup = readManualBackup(accountId);
-      if (backup) return backup;
-    }
-    const raw = JSON.parse(stored);
-    if (Array.isArray(raw)) return Object.fromEntries(raw.map((k) => [k, "found"]));
-    return raw && typeof raw === "object" ? raw : {};
-  } catch {
-    return {};
-  }
-}
-
 let backupTimer = null;
+let lastBackup = null; // last payload sent this session — skips no-op writes
 function saveManual(accountId, obj) {
   try {
     localStorage.setItem(foundKey(accountId), JSON.stringify(obj));
   } catch {}
   if (!accountId) return;
-  // Debounced fire-and-forget: mid-cycle taps collapse into one refresh.
+  // Encoding is stable for a given map, so an unchanged map is a no-op. The
+  // first save of each app load always goes through, which is what refreshes
+  // the cookie's 400-day clock on every visit.
+  const payload = encodeManual(accountId, obj);
+  if (payload === lastBackup) return;
+  // Debounced fire-and-forget: mid-cycle taps collapse into one write.
   clearTimeout(backupTimer);
   backupTimer = setTimeout(() => {
+    lastBackup = payload;
     api("/api/manual", {
       body: JSON.stringify({ accountId, manual: obj }),
-    }).catch(() => {});
+    }).catch(() => {
+      lastBackup = null; // failed — let the next save retry
+    });
   }, 800);
 }
 
@@ -946,7 +959,14 @@ export default function Home() {
   // catalog, anything on an Epic-mastered tile (locked, authoritative), and
   // overrides that now MATCH the sync state (a raise the sync caught up to,
   // or a "missing" suppression on a tile Epic no longer calls found).
-  const reconcileManual = useCallback((col, obj) => {
+  //
+  // `trusted` says whether `col` actually reflects Epic. Pruning against a
+  // collection we DON'T trust would destroy the user's toggles: an unsynced
+  // (empty) collection reports every tile as missing, which reads as "your
+  // suppressions are redundant" and deletes them — precisely what happens
+  // when localStorage was evicted and the toggles were just restored from
+  // the backup cookie. Untrusted passes only drop keys off the catalog.
+  const reconcileManual = useCallback((col, obj, { trusted } = {}) => {
     let changed = false;
     const next = { ...obj };
     for (const [key, val] of Object.entries(obj)) {
@@ -956,11 +976,9 @@ export default function Home() {
         : col.found?.[slug]?.[variant]
         ? RANK.found
         : RANK.missing;
-      if (
-        !MANUAL_KEYS.has(key) ||
-        syncRank === RANK.mastered ||
-        syncRank === RANK[val]
-      ) {
+      const stale =
+        trusted && (syncRank === RANK.mastered || syncRank === RANK[val]);
+      if (!MANUAL_KEYS.has(key) || stale) {
         delete next[key];
         changed = true;
       }
@@ -988,14 +1006,30 @@ export default function Home() {
         // fall back to the stored parse
       }
     }
-    const m = reconcileManual(col, loadManual(accountId));
+    // Only a cached collection reflects Epic; a cold cache must not prune.
+    const trusted = Boolean(cached?.report?.items || cached?.collection);
+    const { manual: loaded, hadKey } = loadManual(accountId);
+    const m = reconcileManual(col, loaded, { trusted });
     setCollection(col);
     setManual(m);
     saveManual(accountId, m);
     setReport(cached?.report || null);
     setLastSync(cached?.lastSync || null);
-    return cached;
+    return { cached, hadKey };
   }, [reconcileManual]);
+
+  // Local storage held nothing for this account — pull the durable backup.
+  // Merges UNDER anything toggled in the meantime so a slow response can
+  // never overwrite a fresh tap.
+  const restoreBackup = useCallback(async (accountId) => {
+    const backup = await restoreManualBackup(accountId);
+    if (!backup) return;
+    setManual((prev) => {
+      const merged = { ...backup, ...prev };
+      saveManual(accountId, merged);
+      return merged;
+    });
+  }, []);
 
   const sync = useCallback(
     async (accountId, { silent = false } = {}) => {
@@ -1005,7 +1039,8 @@ export default function Home() {
         const next = buildCollection(data.items);
         setCollection(next);
         setManual((prev) => {
-          const rec = reconcileManual(next, prev);
+          // A live sync IS Epic's answer — safe to prune against.
+          const rec = reconcileManual(next, prev, { trusted: true });
           saveManual(accountId, rec);
           return rec;
         });
@@ -1053,7 +1088,8 @@ export default function Home() {
         // Ask the browser not to evict our storage (best-effort; Chrome and
         // Android honor it readily, Safari mostly for home-screen apps).
         navigator.storage?.persist?.().catch(() => {});
-        const cached = hydrateFromCache(me.accountId);
+        const { cached, hadKey } = hydrateFromCache(me.accountId);
+        if (!hadKey) restoreBackup(me.accountId);
         if (!bootSynced.current) {
           bootSynced.current = true;
           const age = cached?.lastSync
@@ -1065,7 +1101,7 @@ export default function Home() {
         setAuth({ state: "out" });
       }
     })();
-  }, [hydrateFromCache, sync]);
+  }, [hydrateFromCache, restoreBackup, sync]);
 
   // Persist per account.
   useEffect(() => {
@@ -1264,7 +1300,8 @@ export default function Home() {
           toast={toast}
           onSignedIn={(me) => {
             setAuth({ state: "in", ...me });
-            hydrateFromCache(me.accountId);
+            const { hadKey } = hydrateFromCache(me.accountId);
+            if (!hadKey) restoreBackup(me.accountId);
             sync(me.accountId, { silent: true });
           }}
         />
