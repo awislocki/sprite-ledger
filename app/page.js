@@ -20,6 +20,7 @@ import {
 } from "../lib/collection.js";
 import { encodeCode, decodeCode, tradeDiff, ownedKeySet } from "../lib/share.js";
 import { encodeManual } from "../lib/manual.js";
+import { SpriteRow, VariantRow } from "./ledger-rows.js";
 import { renderShareImage, shareOrDownload } from "../lib/share-image.js";
 
 // Must match EPIC_CLIENT_ID in lib/epic.js — the auth code Epic issues here is
@@ -166,50 +167,6 @@ const keyInfo = (key) => {
   const [slug, variant] = key.split(":");
   return { sprite: SLUG_LOOKUP[slug], variant };
 };
-
-// True while the element sits in the middle band of the viewport — drives
-// the hero image's black&white → colour reveal as rows scroll through.
-// A healthy IntersectionObserver always delivers an initial entry; if none
-// arrives (or IO is missing), fall back to permanently coloured rather than
-// leaving heroes grey forever.
-function useCenterFocus() {
-  const ref = useRef(null);
-  const [focus, setFocus] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof IntersectionObserver === "undefined") {
-      setFocus(true);
-      return;
-    }
-    let fired = false;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        fired = true;
-        setFocus(entry.isIntersecting);
-      },
-      { rootMargin: "-35% 0px -35% 0px", threshold: 0 }
-    );
-    io.observe(el);
-    const fallback = setTimeout(() => {
-      if (!fired) {
-        io.disconnect();
-        setFocus(true);
-      }
-    }, 1500);
-    return () => {
-      clearTimeout(fallback);
-      io.disconnect();
-    };
-  }, []);
-  return [ref, focus];
-}
-
-const Crown = () => (
-  <svg className="crown" viewBox="0 0 24 17" role="img" aria-label="Mastered — level 5">
-    <path d="M2 14 L1 3.5 L7.2 7.8 L12 1 L16.8 7.8 L23 3.5 L22 14 Z" />
-    <rect x="3" y="15" width="18" height="2" rx="1" />
-  </svg>
-);
 
 /* ---------------- Login screen ---------------- */
 
@@ -612,16 +569,22 @@ function SharePanel({
     }
   }
 
-  // One-tap link: opening it lands the friend straight in the compare view
-  // with this collection pre-loaded.
-  async function shareLink() {
+  // Share a link. kind "page" → the public view-only collection page, for
+  // people who don't use the tracker. kind "compare" → straight into the
+  // trade diff, for people who do.
+  async function shareLink(kind) {
     const code = encodeCode(mine, displayName);
-    const url = `${window.location.origin}/?compare=${encodeURIComponent(code)}`;
+    const page = kind === "page";
+    const url = page
+      ? `${window.location.origin}/s/${encodeURIComponent(code)}`
+      : `${window.location.origin}/?compare=${encodeURIComponent(code)}`;
     if (navigator.share) {
       try {
         await navigator.share({
-          title: "FMDS Sprite Tracker",
-          text: `See what you can trade with ${displayName} — opens the compare right away:`,
+          title: page ? `${displayName}'s Sprites` : "FMDS Sprite Tracker",
+          text: page
+            ? `Here's my Sprite collection — everything I have and still need:`
+            : `See what you can trade with ${displayName} — opens the compare right away:`,
           url,
         });
         return;
@@ -632,9 +595,13 @@ function SharePanel({
     }
     try {
       await navigator.clipboard.writeText(url);
-      toast("Compare link copied — whoever opens it sees the trade view.");
+      toast(
+        page
+          ? "Collection link copied — anyone can open it, no sign-in needed."
+          : "Compare link copied — whoever opens it sees the trade view."
+      );
     } catch {
-      window.prompt("Copy your compare link:", url);
+      window.prompt(page ? "Copy your collection link:" : "Copy your compare link:", url);
     }
   }
 
@@ -691,7 +658,10 @@ function SharePanel({
             <button className="btn-step" disabled={!!busy} onClick={() => makeImage("owned")}>
               {busy === "owned" ? "Rendering…" : "🖼 Owned-list image"}
             </button>
-            <button className="btn-step" onClick={shareLink}>
+            <button className="btn-step" onClick={() => shareLink("page")}>
+              🌐 Share my collection page
+            </button>
+            <button className="btn-step" onClick={() => shareLink("compare")}>
               🔗 Share compare link
             </button>
             <button className="btn-step" onClick={copyCode}>
@@ -742,187 +712,6 @@ function SharePanel({
         </div>
       )}
     </div>
-  );
-}
-
-/* ---------------- Sprite row ---------------- */
-
-function SpriteRow({ sprite: s, tiles, stats, tileInfo, onToggle }) {
-  const [ref, focus] = useCenterFocus();
-  const have = stats.mastered + stats.found;
-  const allMastered = stats.mastered > 0 && stats.mastered === stats.total;
-  return (
-    <section
-      ref={ref}
-      className={`srow ${have > 0 ? "started" : "untouched"} ${
-        allMastered ? "mastered" : ""
-      } ${focus ? "infocus" : ""}`}
-      style={{ "--accent": `var(--${s.element})` }}
-    >
-      <img
-        className="srow-hero"
-        src={spriteImage(s)}
-        alt=""
-        aria-hidden="true"
-        loading="lazy"
-        width={196}
-        height={196}
-      />
-      <div className="srow-head">
-        <h3>
-          {s.name}
-          {s.manualOnly && (
-            <span className="prov-badge" title="Not in Epic's sync — track it manually">
-              manual
-            </span>
-          )}
-        </h3>
-        <span className="srow-count">
-          <b className={allMastered ? "done" : ""}>{stats.mastered}</b>
-          <small> mastered</small>
-          {stats.found > 0 && <em> · +{stats.found} found</em>}
-          <small> / {stats.total}</small>
-        </span>
-      </div>
-      <div className="vstrip">
-        {tiles.map((v) => {
-          const { state, sync, source, toggleable } = tileInfo(s.slug, v);
-          const vname = v === "Normal" ? "Base" : v;
-          const nextHint =
-            state === "missing"
-              ? "tap: mark found"
-              : state === "found"
-              ? "tap: mark mastered"
-              : sync === "found"
-              ? "tap: mark not found" // suppress the Epic signal
-              : "tap: clear";
-          const label = `${vname} · ${
-            state === "mastered"
-              ? source === "sync"
-                ? "mastered"
-                : `mastered (manual) — ${nextHint}`
-              : state === "found"
-              ? source === "sync"
-                ? `found (from Epic) — ${nextHint}`
-                : `found — ${nextHint}`
-              : source === "manual"
-              ? `not found (overriding Epic) — ${nextHint}`
-              : `not found — ${nextHint}`
-          }`;
-          const Tag = toggleable ? "button" : "div";
-          return (
-            <Tag
-              key={v}
-              role={toggleable ? undefined : "img"}
-              className={`vtile ${state} vv-${v.toLowerCase()} ${
-                state === "mastered" ? "vmastered" : ""
-              } ${toggleable ? "tappable" : ""}`}
-              onClick={toggleable ? () => onToggle(s.slug, v) : undefined}
-              title={label}
-              aria-label={`${s.name} ${label}`}
-            >
-              <span className="vtile-img">
-                <img
-                  src={spriteImage(s, v)}
-                  alt=""
-                  loading="lazy"
-                  width={54}
-                  height={54}
-                />
-                {state === "missing" && (
-                  <span className="vlock" aria-hidden="true">
-                    +
-                  </span>
-                )}
-                {state === "found" && (
-                  <span className="vcaught" aria-hidden="true">
-                    ✓
-                  </span>
-                )}
-                {state === "mastered" && (
-                  <span className="vcrown" aria-hidden="true">
-                    <Crown />
-                  </span>
-                )}
-              </span>
-            </Tag>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-/* ---------------- Variant row (group-by-variant view) ---------------- */
-
-// Header accent per variant — matches the vtile gradient palette.
-const VARIANT_ACCENTS = {
-  Normal: "#7e93ad",
-  Gold: "#d4a93f",
-  Gummy: "#f75fae",
-  Galaxy: "#6d4bd8",
-  Gem: "#3fa9e0",
-  Holofoil: "#e8b7d4",
-  Cube: "#8a3df0",
-  Quack: "#ffb347",
-};
-
-// One row per variant style; tiles are display-only (no tap), filled
-// edge-to-edge by the sprite art — colour when owned, B&W when missing.
-function VariantRow({ variant, tiles, stats }) {
-  const vname = variant === "Normal" ? "Base" : variant;
-  const have = stats.mastered + stats.found;
-  const allMastered = stats.mastered > 0 && stats.mastered === stats.total;
-  return (
-    <section
-      className={`srow vrow vv-${variant.toLowerCase()} ${
-        have > 0 ? "started" : "untouched"
-      } ${allMastered ? "mastered" : ""}`}
-      style={{ "--accent": VARIANT_ACCENTS[variant] || "var(--dust)" }}
-    >
-      <div className="srow-head">
-        <h3>{vname}</h3>
-        <span className="srow-count">
-          <b className={allMastered ? "done" : ""}>{stats.mastered}</b>
-          <small> mastered</small>
-          {stats.found > 0 && <em> · +{stats.found} found</em>}
-          <small> / {stats.total}</small>
-        </span>
-      </div>
-      <div className="fstrip">
-        {tiles.map(({ sprite: s, state }) => (
-          <div
-            key={s.slug}
-            role="img"
-            className={`ftile ${state}`}
-            title={`${s.name} — ${state === "missing" ? "not found" : state}`}
-            aria-label={`${s.name} ${vname} — ${
-              state === "missing" ? "not found" : state
-            }`}
-          >
-            <span className="ftile-img">
-              <img
-                src={spriteImage(s, variant)}
-                alt=""
-                loading="lazy"
-                width={72}
-                height={72}
-              />
-            </span>
-            {state === "mastered" && (
-              <span className="vcrown" aria-hidden="true">
-                <Crown />
-              </span>
-            )}
-            {state === "found" && (
-              <span className="vcaught" aria-hidden="true">
-                ✓
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
-    </section>
   );
 }
 

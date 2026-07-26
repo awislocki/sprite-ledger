@@ -132,6 +132,19 @@ assert.throws(() => decodeCode("garbage"), /FMDS1/);
 const wrapped = decodeCode(`here's my code: ${code}. hit me up`);
 assert.deepEqual([...wrapped.owned].sort(), [...mine].sort(), "code inside prose");
 assert.throws(() => decodeCode(code.slice(0, code.length - 4)), /different version|cut off/);
+// Display names with spaces or dots must still round-trip: they used to
+// encode a space into the name segment, which decodeCode's pattern rejects,
+// so those users' codes (and share links) were undecodable — every one.
+for (const raw of ["Dark Knight 99", "a.b", "  padded  "]) {
+  const c = encodeCode(mine, raw);
+  // Dots delimit the three segments; the NAME segment must contain neither a
+  // dot nor whitespace or the decoder's pattern can't match it.
+  assert.equal(c.split(".").length, 3, `exactly three segments: ${c}`);
+  assert.doesNotMatch(c.split(".")[1], /[\s.]/u, `name segment is parse-safe: ${c}`);
+  assert.deepEqual([...decodeCode(c).owned].sort(), [...mine].sort(), `round-trips: ${raw}`);
+}
+assert.equal(decodeCode(encodeCode(mine, "Dark Knight 99")).name, "Dark_Knight_99");
+assert.equal(decodeCode(encodeCode(mine, "   ")).name, "Guardian", "blank name falls back");
 
 /* ---- Manual-toggle backup codec (the durable-persistence cookie) ---- */
 

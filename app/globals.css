@@ -314,6 +314,33 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .ftile .vcrown { right: 6px; bottom: 6px; }
 .ftile .vcaught { right: 6px; bottom: 6px; }
 
+/* ---------- Public share page (/s/<code>) ---------- */
+.pub-head { padding: 14px 0 4px; }
+.pub-badge {
+  font-family: var(--display); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--slate);
+  background: var(--ridge); border: 1px solid var(--line);
+  border-radius: 999px; padding: 4px 9px; white-space: nowrap;
+}
+.pub-title {
+  font-family: var(--display); font-size: 26px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.03em;
+  transform: skewX(-8deg); transform-origin: left;
+  margin: 6px 0 2px;
+  background: linear-gradient(100deg, var(--dust) 0%, var(--ink) 70%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+.pub-cta {
+  background: var(--ridge); border: 1px solid var(--line);
+  border-radius: 14px; padding: 4px 14px 16px; margin: 16px 0 10px;
+}
+.pub-cta p { color: var(--slate); font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
+.pub-cta .btn-sync { display: block; text-align: center; text-decoration: none; }
+.pub-cta .btn-step {
+  display: block; margin-top: 8px; text-align: center; text-decoration: none;
+}
+
 /* ---------- Sections / misc ---------- */
 .section-label {
   font-family: var(--display); font-size: 11px; font-weight: 600;

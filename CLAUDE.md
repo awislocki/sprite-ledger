@@ -82,12 +82,26 @@ center on 288px canvas — see the batman re-pad commit).
   Tile states: owned (style unlocked) > caught (creature only — dashed
   accent ring, hollow ✓) > pending > missing. Undecodable tokens fall back
   to a "+N caught" row badge. Duplicate tokens per step are deduped.
+- **Public share page** (`app/s/[code]/`): unauthenticated read-only ledger
+  rendered entirely from a collection code in the URL — no auth, no Epic
+  call, no API request at all (verified), nothing stored. Codes carry ONE
+  BIT per variant, so it speaks has-it/needs-it and shows no crowns. Rows
+  come from `app/ledger-rows.js` (SpriteRow/VariantRow/Crown, shared with
+  the signed-in ledger) via `readOnly` — keep both callers in mind when
+  editing those. `generateMetadata` gives chat apps a real title/count and
+  sets robots:noindex (personal links). SharePanel's "Share my collection
+  page" builds `/s/<code>`; the compare link (`/?compare=`) is the variant
+  for people who already use the tracker.
 - **Share codes:** `FMDS1.<name>.<base64url>` = 2-byte FNV-1a checksum of
   ALL_KEYS order + 89-bit ownership bitmap (lib/share.js). Any catalog
   reorder/insert changes the checksum → old codes get a friendly
   "different version" error, never a silent mis-decode. ALL_KEYS order is
   frozen by assertions in scripts/test-collection.mjs — update that
-  snapshot consciously.
+  snapshot consciously. The name segment must never contain a dot or
+  whitespace: `sanitizeName` collapses both to "_" because decodeCode's
+  pattern rejects them (until 2026-07-26 it wrote a space, so every user
+  whose Epic display name had one — "Dark Knight 99" — produced codes and
+  share links that nothing could decode).
 - **Next 15:** `cookies()` is async — all route handlers await it.
 - **Catalog & images:** `lib/catalog.js` is generated from the
   `Backpack_ColdTrophy` ("Sprite Mastery Pod") cosmetic on fortnite-api.com —
