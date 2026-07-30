@@ -14,6 +14,8 @@ import {
   TOTAL_VARIANTS,
   SLUG_LOOKUP,
   ALL_KEYS,
+  FILE_LOOKUP,
+  IMG_BASE,
   spriteImage,
 } from "../lib/catalog.js";
 import { encodeCode, decodeCode, tradeDiff, ownedKeySet } from "../lib/share.js";
@@ -66,34 +68,33 @@ assert.deepEqual(
   "slim round-trip parses identically"
 );
 
-// Pod sprites use fortnite-api tags (or a "/sprites/..." self-hosted override
-// for styles fortnite-api doesn't carry yet); collab (manualOnly) sprites use
-// local /sprites/ images.
+// Every sprite is a plain pod sprite now (collabs included — Epic folded
+// their styles into the pod, fortnite-api caught up 2026-07-30): every image
+// is a fortnite-api tag, no self-hosted overrides or imgBase remain.
 for (const s of SPRITES) {
+  assert.ok(!s.imgBase && !s.manualOnly, `${s.slug} is a plain pod sprite`);
   for (const [variant, file] of Object.entries(s.variants)) {
-    if (s.imgBase) assert.match(file, /^(batman|vinijr|pollo)_[a-z]+$/, `${s.slug}/${variant}`);
-    else
-      assert.match(
-        file,
-        /^(mat|stage|particle)\d+$|^\/sprites\/[a-z_]+$/,
-        `${s.slug}/${variant}`
-      );
+    assert.match(file, /^(mat|stage|particle)\d+$/, `${s.slug}/${variant}`);
   }
 }
-// The self-hosted override resolves to a local png, not IMG_BASE.
-assert.equal(spriteImage(SLUG_LOOKUP.grim, "Cube"), "/sprites/grimreaper_cube.png");
+// Cube Grim's former self-hosted override now resolves via IMG_BASE.
+assert.equal(spriteImage(SLUG_LOOKUP.grim, "Cube"), `${IMG_BASE}particle3.png`);
 
-// Batman + Vini Jr are now first-class sprites: real self-hosted images, in
-// the share set, correct variant sets (Batman 5, Vini base-only).
+// Batman + Vini Jr are first-class pod sprites: hotlinked pod images, in
+// the share set, correct variant sets (Batman 6, Vini base-only).
 const batman = SLUG_LOOKUP.batman;
 const vini = SLUG_LOOKUP.vinijr;
-assert.ok(batman?.manualOnly && vini?.manualOnly, "collab sprites flagged manualOnly");
-assert.equal(spriteImage(batman, "Gold"), "/sprites/batman_gold.png");
-assert.equal(spriteImage(vini), "/sprites/vinijr_normal.png");
+assert.equal(spriteImage(batman, "Gold"), `${IMG_BASE}particle5.png`);
+assert.equal(spriteImage(vini), `${IMG_BASE}particle12.png`);
 assert.deepEqual(Object.keys(batman.variants), ["Normal", "Gold", "Gummy", "Galaxy", "Holofoil", "Cube"]);
 assert.deepEqual(Object.keys(vini.variants), ["Normal"]);
 assert.deepEqual(Object.keys(SLUG_LOOKUP.pollo.variants), ["Normal"]);
-assert.ok(SLUG_LOOKUP.pollo.manualOnly, "Pollo tracked manually until synced");
+// Owned-tag mastery sync covers the collabs now (tags land in FILE_LOOKUP;
+// the sync lowercases Epic's "Particle9" before the lookup).
+assert.equal(FILE_LOOKUP.particle3.sprite.slug, "grimreaper");
+assert.equal(FILE_LOOKUP.particle9.variant, "Cube");
+assert.equal(FILE_LOOKUP.particle11.sprite.slug, "pollo");
+assert.equal(FILE_LOOKUP.particle12.sprite.slug, "vinijr");
 // In the share set (unlike the old provisional approach) + manual keys.
 assert.ok(ALL_KEYS.includes("batman:Holofoil") && ALL_KEYS.includes("vinijr:Normal"));
 assert.ok(MANUAL_KEYS.has("batman:Gold") && MANUAL_KEYS.has("punk:Gold"));

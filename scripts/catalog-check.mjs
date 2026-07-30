@@ -4,9 +4,11 @@
 //   npm run catalog:check          report only
 //   npm run catalog:check -- --write   also write a suggested catalog block
 //
-// Note: licensed collab sprites (e.g. Batman, Vini Jr) award their OWN
-// backbling and are NOT variants of this pod, so they won't appear here —
-// those come from a live sync report + local asset extraction.
+// Note: licensed collab sprites (Batman, Vini Jr, Pollo) award their OWN
+// backbling in-game, but since ~2026-07 Epic also lists their styles in this
+// pod's Mesh channel, so they DO appear here like any other sprite. A future
+// collab might still launch pod-less — those come from a live sync report +
+// local asset extraction until the pod picks them up.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { SPRITES, VARIANT_ORDER } from "../lib/catalog.js";
