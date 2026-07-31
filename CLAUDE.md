@@ -50,16 +50,19 @@ locked (authoritative). `countMastered`/`countFound` drive the HUD.
 request). Collab sprites (Batman/Vini/Pollo) award their own backbling
 in-game, but Epic also lists their styles in the pod's Mesh channel, so
 they DO appear there — 2026-07-30 the catalog switched them (plus Cube
-Grim) from self-hosted renders to real pod tags (particle3–12), dropped
-`manualOnly`/`imgBase`, and deleted public/sprites/. A future collab could
-still launch pod-less; the fallback machinery remains: a variant file
-starting with "/" is a self-hosted per-variant image override — swap it to
-the real pod tag once catalog:check reports it (fortnite-api can LAG
-in-game releases: Cube Grim, released 2026-07-23, took ~a week). Renders
-for unsynced art come from the Fortnite wiki (fortnite.fandom.com,
-MediaWiki API; fortnite.gg blocks scripts) and get re-framed to pod
-occupancy (alpha-crop, scale to 78% content height, center on 288px canvas
-— see the batman re-pad commit).
+Grim) from self-hosted renders to real pod tags (particle3–12) and dropped
+their `manualOnly`/`imgBase`. The same evening the v41.30 wave repopulated
+public/sprites/ with 19 wiki renders (see the v41.30 block in
+lib/catalog.js) — until fortnite-api catches up, catalog:check will noisily
+report those as removed variants / gone sprites; that's expected. The
+machinery: a variant file starting with "/" is a self-hosted per-variant
+image override — swap it to the real pod tag once catalog:check reports it
+(fortnite-api can LAG in-game releases: Cube Grim, released 2026-07-23,
+took ~a week). Renders for unsynced art come from the Fortnite wiki
+(fortnite.fandom.com, MediaWiki API; fortnite.gg blocks scripts) and get
+re-framed to pod occupancy (alpha-crop, scale to 78% content height,
+center on 288px canvas — scripts/ has no tool for this; the c2e1a06 spec
+was rebuilt with sharp in a scratchpad on 2026-07-30).
 
 ## Legacy ownership notes (superseded by the three-state model above)
 
@@ -182,8 +185,22 @@ occupancy (alpha-crop, scale to 78% content height, center on 288px canvas
   and their pod style tags (Particle3–12, catalog 2026-07-30) haven't been
   seen in a real sync's owned tags yet. Wrong guesses surface in
   "unmapped"/"New from Epic", nothing is lost.
-- The 2026-07-23 catalog change (Cube Grim/Cube Batman inserted, Pollo
-  appended) rolled the share-code checksum — pre-07-23 codes now get the
-  friendly "different version" error.
+- v41.30 wave (2026-07-30, researched + adversarially verified from the
+  wiki same-day): re-run catalog:check in 2–7 days — fortnite-api's pod
+  (still 99 Mesh options) should pick up the 19 additions; then swap "/"
+  overrides → pod tags, fold Lootin' Llama/Peeky Peely (and possibly
+  Ironmouse/John Wick) in as pod sprites, drop their manualOnly/imgBase.
+  Epic slugs for all four new sprites are unknown until a live sync.
+- v41.30 oddities, decided deliberately: Gem Lootin' Llama is in the
+  catalog though the wiki "New" list omits it (its file shipped in the
+  same upload batch and the Loot Pool says Legendary-to-Special — if it
+  turns out unobtainable, users just never toggle it). Gem Grim and the
+  Ironmouse collab went live AND were vaulted the same day at 2 PM EDT
+  (~5h window, likely accidental early enable) — kept for anyone who
+  caught one; watch for a proper re-release. John Wick drops in Reload
+  only and keeps its found level.
+- The 2026-07-30 catalog change rolled the share-code checksum again
+  (v41.30 inserts + appends; ALL_KEYS 98 → 117) — pre-07-30 codes now get
+  the friendly "different version" error.
 - `vercel.json` pins framework=nextjs (project was imported with preset
   "Other"; the pin overrides it).

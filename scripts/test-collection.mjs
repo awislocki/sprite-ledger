@@ -29,8 +29,10 @@ import { fixtureItems, EXPECTED } from "./fixtures/sync-athena-2026-07-19.mjs";
 
 const col = buildCollection(fixtureItems());
 
-// Totals (90 pod variants + Batman's 6 + Vini Jr's 1 + Pollo's 1 = 98)
-assert.equal(TOTAL_VARIANTS, 98, "catalog should carry all 98 variants");
+// Totals: 98 as of 07-23, +19 in the v41.30 wave (2026-07-30): Quack for
+// Water/Earth/Fire, Gem+Holofoil Grim, Holofoil+Cube Zero Point, Lootin'
+// Llama (5), Peeky Peely (5), Ironmouse (1), John Wick (1) = 117.
+assert.equal(TOTAL_VARIANTS, 117, "catalog should carry all 117 variants");
 assert.equal(countMastered(col), EXPECTED.mastered, "mastered count");
 assert.equal(countFound(col), EXPECTED.found, "found count");
 
@@ -68,17 +70,29 @@ assert.deepEqual(
   "slim round-trip parses identically"
 );
 
-// Every sprite is a plain pod sprite now (collabs included — Epic folded
-// their styles into the pod, fortnite-api caught up 2026-07-30): every image
-// is a fortnite-api tag, no self-hosted overrides or imgBase remain.
+// Pod sprites use fortnite-api tags plus "/sprites/..." per-variant
+// overrides for v41.30 styles the pod doesn't carry yet; the four v41.30
+// sprites are fully self-hosted (imgBase) + manualOnly until the pod picks
+// them up (Pollo precedent).
+const V4130_SPRITES = ["lootinllama", "peekypeely", "ironmouse", "johnwick"];
 for (const s of SPRITES) {
-  assert.ok(!s.imgBase && !s.manualOnly, `${s.slug} is a plain pod sprite`);
+  const selfHosted = V4130_SPRITES.includes(s.slug);
+  assert.equal(!!s.imgBase, selfHosted, `${s.slug} imgBase`);
+  assert.equal(!!s.manualOnly, selfHosted, `${s.slug} manualOnly`);
   for (const [variant, file] of Object.entries(s.variants)) {
-    assert.match(file, /^(mat|stage|particle)\d+$/, `${s.slug}/${variant}`);
+    if (s.imgBase)
+      assert.match(file, /^(lootinllama|peekypeely|ironmouse|johnwick)_[a-z]+$/, `${s.slug}/${variant}`);
+    else
+      assert.match(file, /^(mat|stage|particle)\d+$|^\/sprites\/[a-z_]+$/, `${s.slug}/${variant}`);
   }
 }
-// Cube Grim's former self-hosted override now resolves via IMG_BASE.
+// Cube Grim graduated to a pod tag on 2026-07-30; the v41.30 additions are
+// the current self-hosted batch.
 assert.equal(spriteImage(SLUG_LOOKUP.grim, "Cube"), `${IMG_BASE}particle3.png`);
+assert.equal(spriteImage(SLUG_LOOKUP.grim, "Holofoil"), "/sprites/grimreaper_holofoil.png");
+assert.equal(spriteImage(SLUG_LOOKUP.water, "Quack"), "/sprites/water_quack.png");
+assert.equal(spriteImage(SLUG_LOOKUP.peekypeely, "Gold"), "/sprites/peekypeely_gold.png");
+assert.equal(spriteImage(SLUG_LOOKUP.johnwick), "/sprites/johnwick_normal.png");
 
 // Batman + Vini Jr are first-class pod sprites: hotlinked pod images, in
 // the share set, correct variant sets (Batman 6, Vini base-only).
@@ -100,18 +114,26 @@ assert.ok(ALL_KEYS.includes("batman:Holofoil") && ALL_KEYS.includes("vinijr:Norm
 assert.ok(MANUAL_KEYS.has("batman:Gold") && MANUAL_KEYS.has("punk:Gold"));
 
 // Bit-order freeze: share codes assign bit positions from ALL_KEYS order.
-// 2026-07-23 snapshot: Cube Grim + Cube Batman + Pollo inserted/appended —
-// the catalog checksum changed, so pre-07-23 codes get the friendly
-// "different version" error (by design).
-assert.equal(ALL_KEYS.length, 98, "ALL_KEYS count (90 pod + 8 collab)");
+// 2026-07-30 snapshot: the v41.30 wave inserted Quack into Water/Earth/Fire,
+// Gem+Holofoil into Grim, Holofoil+Cube into Zero Point, and appended
+// Lootin' Llama, Peeky Peely, Ironmouse, John Wick — the catalog checksum
+// changed, so pre-07-30 codes get the friendly "different version" error
+// (by design; same roll happened 07-23).
+assert.equal(ALL_KEYS.length, 117, "ALL_KEYS count (107 pod + 10 self-hosted)");
 assert.equal(ALL_KEYS[0], "water:Normal");
-assert.equal(ALL_KEYS[54], "zeropoint:Quack", "pre-Air block boundary");
-assert.equal(ALL_KEYS[55], "air:Normal", "Air starts at bit 55");
-assert.equal(ALL_KEYS[89], "grimreaper:Cube", "last pod key — collab appended after");
-assert.equal(ALL_KEYS[90], "batman:Normal", "Batman appended at 90");
-assert.equal(ALL_KEYS[95], "batman:Cube", "Batman Cube closes the Batman block");
-assert.equal(ALL_KEYS[96], "vinijr:Normal");
-assert.equal(ALL_KEYS[97], "pollo:Normal", "Pollo last");
+assert.equal(ALL_KEYS[6], "water:Quack", "Water Quack closes the Water block");
+assert.equal(ALL_KEYS[59], "zeropoint:Quack", "pre-Air block boundary");
+assert.equal(ALL_KEYS[60], "air:Normal", "Air starts at bit 60");
+assert.equal(ALL_KEYS[96], "grimreaper:Cube", "last original-pod key");
+assert.equal(ALL_KEYS[97], "batman:Normal", "Batman appended at 97");
+assert.equal(ALL_KEYS[102], "batman:Cube", "Batman Cube closes the Batman block");
+assert.equal(ALL_KEYS[103], "vinijr:Normal");
+assert.equal(ALL_KEYS[104], "pollo:Normal");
+assert.equal(ALL_KEYS[105], "lootinllama:Normal", "v41.30 wave starts at 105");
+assert.equal(ALL_KEYS[110], "peekypeely:Normal");
+assert.equal(ALL_KEYS[114], "peekypeely:Holofoil");
+assert.equal(ALL_KEYS[115], "ironmouse:Normal");
+assert.equal(ALL_KEYS[116], "johnwick:Normal", "John Wick last");
 
 // Share owned set = mastered ∪ found (+ optional manual keys).
 const mine = ownedKeySet(col);
