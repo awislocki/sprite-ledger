@@ -403,7 +403,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   border-radius: 999px; padding: 5px 10px;
 }
 .tr-player.you { border-color: var(--dust-dim); color: var(--dust); }
-.tr-player.empty { color: var(--slate); border-style: dashed; opacity: 0.7; }
+.tr-player.seat-open { color: var(--slate); border-style: dashed; opacity: 0.7; }
 .tr-player button { color: var(--slate); font-size: 12px; line-height: 1; padding: 2px; }
 .tr-player button:active { color: var(--danger); }
 
@@ -431,6 +431,36 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .room-upload { display: block; text-align: center; cursor: pointer; margin-top: 8px; }
 .room-upload input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .room-upload:focus-within { outline: 2px solid var(--dust); outline-offset: 2px; }
+.room-upload.busy { opacity: 0.7; cursor: progress; }
+
+/* Confirming what the image reader saw, before it becomes a collection. */
+.room-join.review { gap: 10px; }
+.review-kind { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+.review-kind .chips { padding: 0; }
+.review-tiles { display: flex; flex-wrap: wrap; gap: 6px; }
+.review-tile {
+  position: relative;
+  display: flex; align-items: center; gap: 6px;
+  background: var(--ridge-hi); border: 1px solid var(--line);
+  border-radius: 9px; padding: 4px 8px 4px 4px;
+  text-align: left;
+}
+.review-tile img { width: 34px; height: 34px; object-fit: contain; }
+.review-tile em {
+  font-style: normal; font-family: var(--display);
+  font-size: 10px; font-weight: 600; line-height: 1.25; color: var(--slate);
+}
+.review-tile em b { color: var(--ink); font-weight: 700; }
+/* Dropped: struck through and drained, but still there to tap back on. */
+.review-tile.off { opacity: 0.42; border-style: dashed; }
+.review-tile.off em { text-decoration: line-through; }
+.review-tile.off img { filter: grayscale(1); }
+/* The reader's least confident picks get a dot, so they're checked first. */
+.review-tile.unsure::after {
+  content: ""; position: absolute; top: 4px; right: 4px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--dust);
+}
+.review .linklike { align-self: flex-start; font-size: 12px; }
 
 .tr-cards { display: flex; flex-direction: column; gap: 10px; padding-bottom: 4px; }
 .tr-card {
