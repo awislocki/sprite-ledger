@@ -4,6 +4,7 @@ import {
   isHost,
   completeRoom,
   leaveRoom,
+  renameInRoom,
 } from "../../../../lib/room-store";
 
 export const dynamic = "force-dynamic";
@@ -36,8 +37,11 @@ export async function DELETE(req, { params }) {
   return Response.json({ ok: true });
 }
 
-// Remove one player — how someone undoes a wrong upload. Scoped to the
-// player's own name, which their collection code already establishes.
+// Edit one player: rename with `to`, remove without it. Deliberately open to
+// anyone holding the link — one person often sets the whole room up, and a
+// room is a 20-minute scratchpad among people already trading together, so
+// there's nothing here worth gating. Only closing the room early needs the
+// host token.
 export async function PATCH(req, { params }) {
   const { code } = await params;
   let body = null;
@@ -46,7 +50,14 @@ export async function PATCH(req, { params }) {
   } catch {}
   if (!body?.name) return Response.json({ error: "Missing player." }, { status: 400 });
 
-  const room = await leaveRoom(code, body.name);
-  if (!room) return Response.json(GONE, { status: 404 });
-  return Response.json({ room: publicRoom(room) });
+  try {
+    const room =
+      typeof body.to === "string"
+        ? await renameInRoom(code, body.name, body.to)
+        : await leaveRoom(code, body.name);
+    if (!room) return Response.json(GONE, { status: 404 });
+    return Response.json({ room: publicRoom(room) });
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 400 });
+  }
 }

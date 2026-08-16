@@ -17,10 +17,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { decodeCode } from "../../../lib/share.js";
 import { planTradeRound } from "../../../lib/trade-round.js";
 import { readPngText, FMDS_CODE_KEY } from "../../../lib/png-text.js";
+import { prepareImage } from "../../../lib/image-upload.js";
 import { renderTradeRoundImage } from "../../../lib/trade-image.js";
 import { shareOrDownload } from "../../../lib/share-image.js";
 import RoundCards from "../../round-cards.js";
-import { hostTokenFor, rememberMe, meIn, forgetMe } from "../room-session.js";
+import ImageReview from "./image-review.js";
+import { hostTokenFor } from "../room-session.js";
 
 const POLL_MS = 4000;
 
@@ -35,9 +37,12 @@ export default function RoomLive({ code }) {
   const [loadError, setLoadError] = useState(null);
   const [joinError, setJoinError] = useState(null);
   const [paste, setPaste] = useState("");
+  const [newName, setNewName] = useState(""); // optional name for the next add
+  const [editing, setEditing] = useState(null); // { name, draft } while renaming
+  const [reading, setReading] = useState(null); // a vision read awaiting confirmation
+  const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [rendering, setRendering] = useState(false);
-  const [me, setMe] = useState(null);
   const [host, setHost] = useState(null);
   const [now, setNow] = useState(() => Date.now());
   const [toast, setToast] = useState(null);
@@ -52,7 +57,6 @@ export default function RoomLive({ code }) {
 
   useEffect(() => {
     setHost(hostTokenFor(code));
-    setMe(meIn(code));
   }, [code]);
 
   // Poll for the room. A 404 means it closed (host ended it, or the 20
@@ -111,24 +115,24 @@ export default function RoomLive({ code }) {
     }
   }, [room]);
 
-  async function join(collectionCode) {
+  // Add a player. `name` overrides the one inside the code — that's how you
+  // seat somebody who isn't holding the phone. Passing an explicit name (from
+  // the image review) beats whatever is typed in the add form.
+  async function join(collectionCode, name) {
     setBusy(true);
     setJoinError(null);
     try {
       const res = await fetch(`/api/room/${code}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ collectionCode }),
+        body: JSON.stringify({ collectionCode, name: name ?? newName }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Couldn't join the room.");
       setRoom(data.room);
-      const mine = data.room.players.find((p) => p.code === collectionCode);
-      if (mine) {
-        setMe(mine.name);
-        rememberMe(code, mine.name);
-      }
       setPaste("");
+      setNewName("");
+      setReading(null);
     } catch (err) {
       setJoinError(err.message);
     } finally {
@@ -136,42 +140,80 @@ export default function RoomLive({ code }) {
     }
   }
 
-  // The image the tracker made carries the exact collection code in its PNG
-  // metadata, so an upload is a lossless read — no OCR, nothing guessed.
+  // Two ways in, in order of trust. An image the tracker made carries the exact
+  // collection code in its PNG metadata — that's lossless and instant. Anything
+  // else (a fortnite.gg grid, an in-game screenshot, a picture forwarded through
+  // a chat app that stripped the metadata) goes to the reader, whose answer is a
+  // guess the player confirms before it counts.
   async function onFile(event) {
     const file = event.target.files?.[0];
     event.target.value = ""; // let the same file be picked again after a fix
     if (!file) return;
     setJoinError(null);
+    setReading(null);
+
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const found = readPngText(bytes, FMDS_CODE_KEY);
-      if (!found)
+      const stamped = readPngText(bytes, FMDS_CODE_KEY);
+      if (stamped) {
+        await join(stamped);
+        return;
+      }
+    } catch {
+      // Not a readable PNG — fall through to the reader.
+    }
+
+    setScanning(true);
+    try {
+      const image = await prepareImage(file);
+      const res = await fetch("/api/read-collection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ room: code, image }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Couldn't read that image.");
+      if (!data.reading.keys.length)
         throw new Error(
-          "That image doesn't carry a collection code. Chat apps strip it when they re-save a picture — upload the file the tracker downloaded, or paste your code below."
+          "No sprites found in that picture — try a clearer screenshot of the grid, or paste your code below."
         );
-      await join(found);
+      setReading(data.reading);
     } catch (err) {
       setJoinError(err.message);
+    } finally {
+      setScanning(false);
     }
   }
 
-  async function leave() {
-    if (!me) return;
+  // Both edits are open to anyone holding the link: one person usually sets
+  // the whole room up, and there's nothing here worth gating.
+  async function editPlayer(payload) {
     setBusy(true);
+    setJoinError(null);
     try {
       const res = await fetch(`/api/room/${code}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: me }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (res.ok) setRoom(data.room);
-      forgetMe(code);
-      setMe(null);
+      if (!res.ok) throw new Error(data.error || "Couldn't change that player.");
+      setRoom(data.room);
+      return true;
+    } catch (err) {
+      setJoinError(err.message);
+      return false;
     } finally {
       setBusy(false);
     }
+  }
+
+  const removePlayer = (name) => editPlayer({ name });
+
+  async function rename() {
+    const to = editing?.draft.trim();
+    if (!to || to === editing.name) return setEditing(null);
+    if (await editPlayer({ name: editing.name, to })) setEditing(null);
   }
 
   async function markComplete() {
@@ -315,38 +357,96 @@ export default function RoomLive({ code }) {
 
       {room && (
         <div className="tr-roster">
-          {room.players.map((p) => (
-            <span
-              className={`tr-player ${p.name === me ? "you" : ""}`}
-              key={p.name}
-            >
-              {p.name}
-              {p.name === me && !closed && (
-                <button aria-label="Leave the room" onClick={leave}>
+          {room.players.map((p) =>
+            editing?.name === p.name ? (
+              <span className="tr-player editing" key={p.name}>
+                <input
+                  value={editing.draft}
+                  autoFocus
+                  maxLength={20}
+                  aria-label={`Rename ${p.name}`}
+                  onChange={(e) => setEditing({ ...editing, draft: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") rename();
+                    if (e.key === "Escape") setEditing(null);
+                  }}
+                />
+                <button aria-label="Save name" disabled={busy} onClick={rename}>
+                  ✓
+                </button>
+                <button aria-label="Cancel" onClick={() => setEditing(null)}>
                   ✕
                 </button>
-              )}
-            </span>
-          ))}
+              </span>
+            ) : (
+              <span className="tr-player" key={p.name}>
+                {p.name}
+                {!closed && (
+                  <>
+                    <button
+                      aria-label={`Rename ${p.name}`}
+                      onClick={() => setEditing({ name: p.name, draft: p.name })}
+                    >
+                      ✎
+                    </button>
+                    <button
+                      aria-label={`Remove ${p.name}`}
+                      disabled={busy}
+                      onClick={() => removePlayer(p.name)}
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+              </span>
+            )
+          )}
           {Array.from({ length: waiting }).map((_, i) => (
-            <span className="tr-player empty" key={`empty-${i}`}>
-              waiting…
+            <span className="tr-player seat-open" key={`seat-${i}`}>
+              empty seat
             </span>
           ))}
         </div>
       )}
 
-      {!closed && !me && (
+      {!closed && reading && (
+        <ImageReview
+          reading={reading}
+          busy={busy}
+          onCancel={() => setReading(null)}
+          onConfirm={join}
+        />
+      )}
+
+      {!closed && !reading && waiting > 0 && (
         <div className="room-join">
-          <div className="section-label">Drop in your collection</div>
-          <label className="btn-sync room-upload">
-            🖼 Upload my collection image
-            <input type="file" accept="image/png,image/*" onChange={onFile} />
+          <div className="section-label">
+            Add a player{joined > 0 ? ` — ${waiting} seat${waiting === 1 ? "" : "s"} left` : ""}
+          </div>
+          <label className={`btn-sync room-upload ${scanning ? "busy" : ""}`}>
+            {scanning ? "Reading the image…" : "🖼 Upload a collection image"}
+            <input
+              type="file"
+              accept="image/*"
+              disabled={scanning}
+              onChange={onFile}
+            />
           </label>
           <p className="field-hint">
-            The missing-list or owned-list image from the tracker — it carries
-            your collection inside the file.
+            Anyone can add anyone — one phone can fill the whole room. The
+            tracker&rsquo;s own image goes straight in, since it carries the
+            collection inside the file. Any other picture (a fortnite.gg grid,
+            a screenshot) gets read, and you check it before it counts.
           </p>
+          <input
+            id="room-name-input"
+            className="room-name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Name for this player (optional)"
+            autoComplete="off"
+            maxLength={20}
+          />
           <div className="share-compare-row">
             <input
               id="room-code-input"
@@ -355,7 +455,7 @@ export default function RoomLive({ code }) {
                 setPaste(e.target.value);
                 setJoinError(null);
               }}
-              placeholder="…or paste FMDS1.YourName.xxxx"
+              placeholder="…or paste their FMDS1 code"
               autoComplete="off"
               spellCheck={false}
             />
@@ -364,7 +464,7 @@ export default function RoomLive({ code }) {
               disabled={!paste.trim() || busy}
               onClick={() => join(paste.trim())}
             >
-              Join
+              Add
             </button>
           </div>
           {joinError && (
@@ -419,15 +519,17 @@ export default function RoomLive({ code }) {
         )}
       </div>
 
-      {!me && !closed && (
+      {!closed && waiting > 0 && (
         <div className="pub-cta">
-          <div className="section-label">Need your collection image?</div>
+          <div className="section-label">Where collections come from</div>
           <p>
-            Sign in with Epic on the tracker, open <b>Share with friends</b>,
-            and tap <b>Missing-list image</b> — then upload that file here.
+            A player on the tracker signs in with Epic, opens{" "}
+            <b>Share with friends</b> and taps <b>Missing-list image</b> or{" "}
+            <b>Copy my collection code</b>. Anyone else can just send you a
+            screenshot of their sprites.
           </p>
           <a className="btn-step" href="/">
-            Get my collection image
+            Get a collection image
           </a>
         </div>
       )}

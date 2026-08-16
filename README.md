@@ -59,6 +59,24 @@ nothing from a session. Redis expires each room 20 minutes after the last
 player joins (12h if it never fills), and "mark complete" deletes it
 immediately, so nothing accumulates.
 
+### Reading collections from screenshots (optional)
+
+Players who don't use the tracker can still join a room by uploading a picture
+of their sprites — a fortnite.gg grid, an in-game screenshot. Set:
+
+```
+ANTHROPIC_API_KEY=<from console.anthropic.com>
+```
+
+The image goes to Claude vision, which picks from the catalog's own sprite and
+style lists, and the player confirms the reading before it counts. Without the
+key the upload button still works for images the tracker itself made (those
+carry their collection inside the file) and everyone else pastes a code.
+
+Roughly $0.05–0.10 per image read: images are downscaled to 2576px before
+upload, and reading only works from inside a live room, so the cost is bounded
+by rooms people actually start.
+
 ## Error handling map
 
 | Situation | What the user sees |

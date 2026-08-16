@@ -140,12 +140,47 @@ was rebuilt with sharp in a scratchpad on 2026-07-30).
   would show them a round nobody else could see). The host token is returned
   exactly once by POST /api/room, lives in the creator's localStorage, and is
   never in `publicRoom()` output — asserted in the test.
-- **Image upload = lossless, not OCR** (`lib/png-text.js`): every share image
-  is stamped with the exact collection code that produced it, in a PNG tEXt
-  chunk (~67 bytes, nothing visible). Uploading that file to a room decodes
-  back to precisely that collection — no reading sprites off pixels. Chat
-  apps that re-encode a picture strip the chunk, which is why every room also
-  takes a pasted code; the error message says exactly that.
+- **Anyone with the link can add, rename, or remove ANY player** — one person
+  usually sets the whole room up from one phone, so a device is not tied to a
+  seat (there's no "which player am I" in localStorage, only the host token,
+  and only "mark complete" is gated). That makes **the collection code the
+  identity, not the display name**: re-sending the same code refreshes that
+  player, while a different code with the same name is a different person and
+  gets suffixed "(2)". Keying on the name instead would silently merge two
+  friends whose codes both fall back to "Guardian" into one seat — the test
+  pins both halves. Names are per-roster and editable; the round renders from
+  `players[].name`, not from the name inside the code.
+- **Image upload — two paths, in order of trust.** (1) *Exact*
+  (`lib/png-text.js`): every share image is stamped with the collection code
+  that produced it, in a PNG tEXt chunk (~67 bytes, nothing visible), so
+  uploading that file decodes back to precisely that collection with nothing
+  guessed. (2) *Read* (`lib/vision-catalog.js` + `app/api/read-collection/`):
+  any other picture — a fortnite.gg grid, an in-game screenshot, a chat-app
+  re-encode that stripped the chunk — goes to Claude vision. A pasted code is
+  still the third way in and the recovery path for both.
+- **The reader can only name real sprites.** The structured-output schema's
+  enums ARE the catalog (`SPRITE_LABELS` × `VARIANT_LABELS`), and every pair
+  is re-checked through `toKey` afterwards, so an impossible combination
+  (Holofoil Earth) is dropped rather than believed — style sets differ per
+  sprite and a plausible-looking pair would put a sprite in someone's
+  collection that Epic never shipped. Sources write the base style as "Base"
+  or omit it; the catalog calls it Normal (`BASE_LABEL` bridges that).
+- **`listKind` is the field that can invert a whole collection.** The same
+  grid means opposite things depending on its heading — fortnite.gg's "I'M
+  LOOKING FOR THESE" is a MISSING list, ours says "MISSING SPRITES" or "OWNED
+  SPRITES". A missing list is inverted against ALL_KEYS, which is only sound
+  if the screenshot was complete; a partial one would hand the player sprites
+  they don't own and the round would ask them to trade one away. Hence
+  `app/room/[code]/image-review.js`: nothing reaches a room until a human
+  confirms the polarity (never pre-picked when the model says "unclear"),
+  drops wrong tiles, and types a name — the reading carries no name of its
+  own. Low-confidence picks are dotted so they get checked first.
+- Reading costs money, so `/api/read-collection` is gated on a live room, caps
+  the image at 6MB, and the client downscales to 2576px (Claude's high-res
+  ceiling) before upload. Model is `claude-opus-5`; thinking is on by default
+  and shares `max_tokens` with the JSON, hence the 8000. `stop_reason` is
+  checked for `refusal`/`max_tokens` before the content is touched — both
+  arrive as an ordinary 200.
 - **Canvas primitives** live in `lib/share-canvas.js`, shared by both image
   renderers. `loadImage` and `loadDisplayFont` are both time-capped: a
   stalled sprite request or a webfont stylesheet that never arrives fires no
