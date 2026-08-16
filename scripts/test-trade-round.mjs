@@ -156,6 +156,7 @@ const stale = planTradeRound([
 assertSound(stale, "stale");
 assert.ok(!stale.trades.some((t) => t.key === "gonesprite:Gold"));
 
+assert.equal(MAX_ROUND_PLAYERS, 4, "a round is a squad — 4 players max");
 assert.throws(() => planTradeRound([player("Solo", ["fire:Normal"])]), /at least two/);
 assert.throws(
   () =>
@@ -181,8 +182,12 @@ const t0 = process.hrtime.bigint();
 const full = planTradeRound(big);
 const ms = Number(process.hrtime.bigint() - t0) / 1e6;
 assertSound(full, "full house");
-assert.equal(full.trades.length, MAX_ROUND_PLAYERS, "all 8 trade");
-assert.ok(ms < 2000, `planning 8 players took ${ms.toFixed(0)}ms`);
+assert.equal(
+  full.trades.length,
+  MAX_ROUND_PLAYERS,
+  `all ${MAX_ROUND_PLAYERS} trade`
+);
+assert.ok(ms < 2000, `planning a full house took ${ms.toFixed(0)}ms`);
 
 console.log(
   `ok — trade rounds: ${a.trades.length}-player round, ` +

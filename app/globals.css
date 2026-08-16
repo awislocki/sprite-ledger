@@ -389,22 +389,23 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 }
 .mini-empty { font-size: 12px; color: var(--slate); padding: 6px 0; }
 
-/* ---------- Trade round ---------- */
-.trade-round { display: flex; flex-direction: column; gap: 10px; }
-.trade-round .section-label { padding-top: 4px; }
-.tr-blurb { font-size: 12px; color: var(--slate); line-height: 1.5; }
-.tr-roster { display: flex; flex-wrap: wrap; gap: 6px; }
+/* ---------- Trade round (the public /trade page) ---------- */
+.tr-cards + .share-actions { padding-top: 4px; }
+.share-actions .btn-sync { text-align: center; }
+.share-compare-row input:disabled { opacity: 0.5; }
+.tr-blurb { font-size: 13px; color: var(--slate); line-height: 1.6; padding: 10px 0; }
+.tr-blurb b { color: var(--ink); font-weight: 600; }
+.tr-roster { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 0; }
 .tr-player {
   display: inline-flex; align-items: center; gap: 6px;
   font-family: var(--display); font-size: 12px; font-weight: 600;
   background: var(--ridge-hi); border: 1px solid var(--line);
   border-radius: 999px; padding: 5px 10px;
 }
-.tr-player.you { border-color: var(--dust-dim); color: var(--dust); }
 .tr-player button { color: var(--slate); font-size: 12px; line-height: 1; padding: 2px; }
 .tr-player button:active { color: var(--danger); }
 
-.tr-cards { display: flex; flex-direction: column; gap: 10px; }
+.tr-cards { display: flex; flex-direction: column; gap: 10px; padding-bottom: 4px; }
 .tr-card {
   position: relative;
   background: var(--obsidian); border: 1px solid var(--line);

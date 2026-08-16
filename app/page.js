@@ -22,7 +22,6 @@ import { encodeCode, decodeCode, tradeDiff, ownedKeySet } from "../lib/share.js"
 import { encodeManual } from "../lib/manual.js";
 import { SpriteRow, VariantRow } from "./ledger-rows.js";
 import { renderShareImage, shareOrDownload } from "../lib/share-image.js";
-import TradeRoundPanel from "./trade-round-panel.js";
 
 // Must match EPIC_CLIENT_ID in lib/epic.js — the auth code Epic issues here is
 // redeemed with that client's credentials. fortniteAndroidGameClient (Epic
@@ -606,6 +605,14 @@ function SharePanel({
     }
   }
 
+  // The round planner lives on a public page (no sign-in — friends who don't
+  // use the tracker still need to open it), so it takes every player as a
+  // code. Hand it yours to start with.
+  function openRound() {
+    const code = encodeCode(mine, displayName);
+    window.location.href = `/trade?p=${encodeURIComponent(code)}`;
+  }
+
   function runCompare() {
     setCompareError(null);
     setFriend(null);
@@ -665,6 +672,9 @@ function SharePanel({
             <button className="btn-step" onClick={() => shareLink("compare")}>
               🔗 Share compare link
             </button>
+            <button className="btn-step" onClick={openRound}>
+              🔁 Plan a trade round
+            </button>
             <button className="btn-step" onClick={copyCode}>
               📋 Copy my collection code
             </button>
@@ -711,11 +721,6 @@ function SharePanel({
             )}
           </div>
 
-          <TradeRoundPanel
-            mine={mine}
-            displayName={displayName}
-            toast={toast}
-          />
         </div>
       )}
     </div>
