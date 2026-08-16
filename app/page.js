@@ -543,6 +543,8 @@ function SharePanel({
         title: mode === "owned" ? "Owned Sprites" : "Missing Sprites",
         subtitle: `${displayName} · ${ownedTotal}/${TOTAL_VARIANTS} collected`,
         keys,
+        // Stamped into the PNG so this image can be uploaded to a trade room.
+        code: encodeCode(mine, displayName),
       });
       const result = await shareOrDownload(
         blob,
@@ -605,12 +607,13 @@ function SharePanel({
     }
   }
 
-  // The round planner lives on a public page (no sign-in — friends who don't
-  // use the tracker still need to open it), so it takes every player as a
-  // code. Hand it yours to start with.
-  function openRound() {
+  // The round planner and the live room are both public pages (no sign-in —
+  // friends who don't use the tracker still need to open them), so they take
+  // every player as a code. Hand them yours to start with.
+  function openRound(kind) {
     const code = encodeCode(mine, displayName);
-    window.location.href = `/trade?p=${encodeURIComponent(code)}`;
+    const path = kind === "room" ? "/room" : "/trade";
+    window.location.href = `${path}?p=${encodeURIComponent(code)}`;
   }
 
   function runCompare() {
@@ -672,8 +675,11 @@ function SharePanel({
             <button className="btn-step" onClick={() => shareLink("compare")}>
               🔗 Share compare link
             </button>
-            <button className="btn-step" onClick={openRound}>
-              🔁 Plan a trade round
+            <button className="btn-step" onClick={() => openRound("room")}>
+              👥 Start a trade room
+            </button>
+            <button className="btn-step" onClick={() => openRound("trade")}>
+              🔁 Plan a round from codes
             </button>
             <button className="btn-step" onClick={copyCode}>
               📋 Copy my collection code

@@ -402,8 +402,35 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   background: var(--ridge-hi); border: 1px solid var(--line);
   border-radius: 999px; padding: 5px 10px;
 }
+.tr-player.you { border-color: var(--dust-dim); color: var(--dust); }
+.tr-player.empty { color: var(--slate); border-style: dashed; opacity: 0.7; }
 .tr-player button { color: var(--slate); font-size: 12px; line-height: 1; padding: 2px; }
 .tr-player button:active { color: var(--danger); }
+
+/* ---------- Trade room (/room, /room/<code>) ---------- */
+.room-setup {
+  background: var(--ridge); border: 1px solid var(--line);
+  border-radius: 14px; padding: 4px 14px 16px; margin: 4px 0 10px;
+}
+.room-setup .btn-sync { width: 100%; margin-top: 12px; }
+.room-setup .chips { padding: 4px 0; }
+.room-clock {
+  font-family: var(--display); font-size: 12px; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--dust); white-space: nowrap;
+}
+.room-clock.waiting { color: var(--slate); }
+.room-clock.done { color: var(--danger); }
+.room-join {
+  background: var(--ridge); border: 1px solid var(--line);
+  border-radius: 14px; padding: 4px 14px 14px; margin: 10px 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+/* The file input is the label — the real control is visually hidden but
+   still focusable, so keyboard and screen-reader users keep it. */
+.room-upload { display: block; text-align: center; cursor: pointer; margin-top: 8px; }
+.room-upload input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.room-upload:focus-within { outline: 2px solid var(--dust); outline-offset: 2px; }
 
 .tr-cards { display: flex; flex-direction: column; gap: 10px; padding-bottom: 4px; }
 .tr-card {

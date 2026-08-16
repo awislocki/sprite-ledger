@@ -6,7 +6,6 @@
 // group (including people who don't use the tracker) work from one link.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { spriteImage } from "../../lib/catalog.js";
 import { decodeCode } from "../../lib/share.js";
 import {
   planTradeRound,
@@ -15,63 +14,7 @@ import {
 } from "../../lib/trade-round.js";
 import { renderTradeRoundImage } from "../../lib/trade-image.js";
 import { shareOrDownload } from "../../lib/share-image.js";
-
-const label = (variant) => (variant === "Normal" ? "Base" : variant);
-
-function SpriteTile({ trade }) {
-  return (
-    <span className={`vtile vv-${trade.variant.toLowerCase()}`}>
-      <span className="vtile-img">
-        <img
-          src={trade.sprite ? spriteImage(trade.sprite, trade.variant) : ""}
-          alt=""
-          width={48}
-          height={48}
-          loading="lazy"
-        />
-      </span>
-    </span>
-  );
-}
-
-// Variant above name, the same reading order as the share image.
-function GiftName({ trade }) {
-  return (
-    <span className="tr-gift-name">
-      <i>{label(trade.variant)}</i>
-      <b>{trade.sprite?.name || trade.key}</b>
-    </span>
-  );
-}
-
-function SwapSide({ trade, name }) {
-  return (
-    <div className="tr-side">
-      <strong>{name(trade.from)}</strong>
-      <small>hands over</small>
-      <SpriteTile trade={trade} />
-      <GiftName trade={trade} />
-    </div>
-  );
-}
-
-// One hand-off in a chain. The tile sits left of a two-line column so long
-// Epic display names get the full width instead of being clipped to "Dark_…".
-function ChainHop({ trade, name }) {
-  return (
-    <div className="tr-line">
-      <SpriteTile trade={trade} />
-      <span className="tr-hop">
-        <span className="tr-hop-names">
-          <span>{name(trade.from)}</span>
-          <i aria-hidden="true">→</i>
-          <span>{name(trade.to)}</span>
-        </span>
-        <GiftName trade={trade} />
-      </span>
-    </div>
-  );
-}
+import RoundCards from "../round-cards.js";
 
 export default function TradePlanner() {
   const [players, setPlayers] = useState([]); // [{ name, owned, code }]
@@ -186,7 +129,6 @@ export default function TradePlanner() {
     }
   }
 
-  const name = (i) => round.players[i].name;
   const full = players.length >= MAX_ROUND_PLAYERS;
 
   return (
@@ -276,39 +218,7 @@ export default function TradePlanner() {
 
       {round && round.trades.length > 0 && (
         <>
-          <div className="tr-cards">
-            {round.circles.map((circle, ci) => (
-              <div className="tr-card" key={ci}>
-                {circle.players.length === 2 ? (
-                  <>
-                    <span className="tr-tag">Straight swap</span>
-                    <div className="tr-swap">
-                      <SwapSide trade={circle.trades[0]} name={name} />
-                      <span className="tr-swap-icon" aria-hidden="true">
-                        ⇄
-                      </span>
-                      <SwapSide trade={circle.trades[1]} name={name} />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <span className="tr-tag">
-                      Chain · {circle.players.length} players · pass it round
-                    </span>
-                    {circle.trades.map((t) => (
-                      <ChainHop key={t.from} trade={t} name={name} />
-                    ))}
-                  </>
-                )}
-              </div>
-            ))}
-            {round.sitOut.length > 0 && (
-              <div className="mini-empty">
-                {round.sitOut.map(name).join(", ")} sat out — no one here has a
-                Sprite they still need.
-              </div>
-            )}
-          </div>
+          <RoundCards round={round} />
 
           <div className="share-actions">
             <button className="btn-sync" disabled={busy} onClick={shareImage}>
@@ -334,6 +244,18 @@ export default function TradePlanner() {
           </div>
         </>
       )}
+
+      <div className="pub-cta">
+        <div className="section-label">Everyone in one place?</div>
+        <p>
+          Start a trade room instead: pick the player count, share one link,
+          and each player drops in their own collection. Trades appear once two
+          are in and re-plan as the rest arrive.
+        </p>
+        <a className="btn-step" href="/room">
+          Start a trade room
+        </a>
+      </div>
 
       <div className="pub-cta">
         <div className="section-label">Need a code?</div>

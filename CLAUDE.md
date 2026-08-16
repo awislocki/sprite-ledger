@@ -120,6 +120,32 @@ was rebuilt with sharp in a scratchpad on 2026-07-30).
   can never be asked to give it away in the same round.
   `scripts/test-trade-round.mjs` asserts the give-one/get-one invariant on
   every case — keep it green, it's the whole contract.
+- **Trade rooms** (`lib/room-store.js` + `app/api/room/…`, UI in `app/room/`):
+  the ONE piece of shared server state in the app — a room outlives a single
+  visit because players arrive at different times. Held: display names +
+  collection codes (the same strings people paste into chats), NEVER Epic
+  tokens, account ids or anything from a session cookie. Redis TTL does the
+  expiry, so nothing sweeps: 12h while a room is filling (outer safety net),
+  then exactly 20 min from the moment the last player joins; "mark complete"
+  DELs immediately. A late re-upload must NOT restart that clock — the test
+  pins it. Talks the Upstash REST protocol over plain `fetch` (Vercel KV and
+  Upstash both speak it) so there's still no client library; with no
+  credentials it falls back to an in-memory Map hung off `globalThis` —
+  module scope does NOT work, Next compiles each route into its own module
+  instance and /api/room and /api/room/[code] would get separate stores
+  (cost an hour on 2026-08-16). That fallback is dev-only and says so.
+  Rooms plan at **seed 0 always**: the planner is deterministic and every
+  player gets the same roster in the same order, so everyone sees the same
+  proposal — that's why there's no re-roll in a room (one player re-rolling
+  would show them a round nobody else could see). The host token is returned
+  exactly once by POST /api/room, lives in the creator's localStorage, and is
+  never in `publicRoom()` output — asserted in the test.
+- **Image upload = lossless, not OCR** (`lib/png-text.js`): every share image
+  is stamped with the exact collection code that produced it, in a PNG tEXt
+  chunk (~67 bytes, nothing visible). Uploading that file to a room decodes
+  back to precisely that collection — no reading sprites off pixels. Chat
+  apps that re-encode a picture strip the chunk, which is why every room also
+  takes a pasted code; the error message says exactly that.
 - **Canvas primitives** live in `lib/share-canvas.js`, shared by both image
   renderers. `loadImage` and `loadDisplayFont` are both time-capped: a
   stalled sprite request or a webfont stylesheet that never arrives fires no
@@ -196,6 +222,13 @@ was rebuilt with sharp in a scratchpad on 2026-07-30).
 - Never accept, log, or commit tokens/secrets. `.gitignore` covers `.env*`.
   (Epic client ids/secrets in `lib/epic.js` are public game-binary constants,
   not secrets.)
+- **"Nothing at rest" now has exactly ONE exception: trade rooms** (added
+  2026-08-16, deliberately — a shared room can't be computed from a URL the
+  way `/s/<code>` and `/trade` are). The exception is bounded and must stay
+  that way: display names + collection codes only, auto-deleted within
+  20 minutes of the room filling, no auth data, no account ids, no sync
+  payloads. Everything else in the app still keeps nothing server-side.
+  Don't widen this to "well, we have a database now."
 - Never hardcode SESSION_SECRET. It's set in Vercel; the login route
   fail-fasts with instructions if missing — deliberate, never burn a user's
   single-use Epic code on a misconfigured server.
