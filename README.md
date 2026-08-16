@@ -24,7 +24,7 @@ Create `.env.local` (and set the same in Vercel → Project Settings → Environ
 SESSION_SECRET=<output of: openssl rand -hex 32>
 ```
 
-That's the only config. Then:
+That's the only config the tracker itself needs. Then:
 
 ```bash
 npm run dev        # local — open via LAN IP on your phone
@@ -33,6 +33,31 @@ npm run dev        # local — open via LAN IP on your phone
 or push to GitHub → import in Vercel → add `SESSION_SECRET` → deploy. Share the URL with friends; each signs in with their own Epic account. Add to home screen for the app feel.
 
 > Changing `SESSION_SECRET` invalidates everyone's sessions (they just sign in again).
+
+### Trade rooms (optional)
+
+Everything except **trade rooms** is stateless — collection links and the
+one-off round planner are computed from the URL, with nothing on a server. A
+room is the exception: players arrive at different times, so it has to be held
+somewhere between visits.
+
+Add a Redis store in **Vercel → Project → Storage** (Vercel KV, or Upstash
+Redis via the Marketplace). Attaching it sets the env vars automatically —
+either pair works, no code change:
+
+```
+KV_REST_API_URL / KV_REST_API_TOKEN            # Vercel KV
+UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN   # Upstash direct
+```
+
+Without them, `/room` returns a clear "not configured" error in production and
+falls back to an in-memory store locally, so `npm run dev` works offline.
+
+What a room holds: display names and collection codes — the same strings
+people already paste into group chats. No Epic tokens, no account ids,
+nothing from a session. Redis expires each room 20 minutes after the last
+player joins (12h if it never fills), and "mark complete" deletes it
+immediately, so nothing accumulates.
 
 ## Error handling map
 

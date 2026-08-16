@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "dev:mock": "node scripts/dev-mock.mjs",
-    "test": "node scripts/test-collection.mjs",
+    "test": "node scripts/test-collection.mjs && node scripts/test-trade-round.mjs && node scripts/test-room.mjs",
     "catalog:check": "node scripts/catalog-check.mjs"
   },
   "dependencies": {

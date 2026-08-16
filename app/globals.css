@@ -389,6 +389,99 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 }
 .mini-empty { font-size: 12px; color: var(--slate); padding: 6px 0; }
 
+/* ---------- Trade round (the public /trade page) ---------- */
+.tr-cards + .share-actions { padding-top: 4px; }
+.share-actions .btn-sync { text-align: center; }
+.share-compare-row input:disabled { opacity: 0.5; }
+.tr-blurb { font-size: 13px; color: var(--slate); line-height: 1.6; padding: 10px 0; }
+.tr-blurb b { color: var(--ink); font-weight: 600; }
+.tr-roster { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 0; }
+.tr-player {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--display); font-size: 12px; font-weight: 600;
+  background: var(--ridge-hi); border: 1px solid var(--line);
+  border-radius: 999px; padding: 5px 10px;
+}
+.tr-player.you { border-color: var(--dust-dim); color: var(--dust); }
+.tr-player.empty { color: var(--slate); border-style: dashed; opacity: 0.7; }
+.tr-player button { color: var(--slate); font-size: 12px; line-height: 1; padding: 2px; }
+.tr-player button:active { color: var(--danger); }
+
+/* ---------- Trade room (/room, /room/<code>) ---------- */
+.room-setup {
+  background: var(--ridge); border: 1px solid var(--line);
+  border-radius: 14px; padding: 4px 14px 16px; margin: 4px 0 10px;
+}
+.room-setup .btn-sync { width: 100%; margin-top: 12px; }
+.room-setup .chips { padding: 4px 0; }
+.room-clock {
+  font-family: var(--display); font-size: 12px; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--dust); white-space: nowrap;
+}
+.room-clock.waiting { color: var(--slate); }
+.room-clock.done { color: var(--danger); }
+.room-join {
+  background: var(--ridge); border: 1px solid var(--line);
+  border-radius: 14px; padding: 4px 14px 14px; margin: 10px 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+/* The file input is the label — the real control is visually hidden but
+   still focusable, so keyboard and screen-reader users keep it. */
+.room-upload { display: block; text-align: center; cursor: pointer; margin-top: 8px; }
+.room-upload input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.room-upload:focus-within { outline: 2px solid var(--dust); outline-offset: 2px; }
+
+.tr-cards { display: flex; flex-direction: column; gap: 10px; padding-bottom: 4px; }
+.tr-card {
+  position: relative;
+  background: var(--obsidian); border: 1px solid var(--line);
+  border-radius: 14px; padding: 26px 12px 12px;
+}
+.tr-tag {
+  position: absolute; top: 8px; left: 12px;
+  font-family: var(--display); font-size: 10px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--dust);
+}
+
+/* Two-player swap: the pair face each other, arrows between them. */
+.tr-swap { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; }
+.tr-side {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  text-align: center;
+}
+.tr-side strong {
+  font-family: var(--display); font-size: 14px; font-weight: 700;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tr-side small { font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--slate); }
+.tr-swap-icon { align-self: center; color: var(--earth); font-size: 20px; padding: 0 2px; }
+
+/* Three-plus: one hand-off per line — tile, then giver → receiver over the
+   sprite's name, so long Epic display names get the width they need. */
+.tr-line { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+.tr-line + .tr-line { border-top: 1px solid var(--line); }
+.tr-hop { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.tr-hop-names {
+  display: flex; align-items: baseline; gap: 6px;
+  font-family: var(--display); font-size: 13px; font-weight: 700;
+}
+.tr-hop-names span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-hop-names i { flex: none; font-style: normal; color: var(--earth); }
+
+.tr-gift-name {
+  display: flex; flex-direction: column;
+  font-family: var(--display); line-height: 1.25;
+}
+.tr-gift-name i {
+  font-style: normal; font-size: 9px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--slate);
+}
+.tr-gift-name b { font-size: 12px; font-weight: 700; color: var(--ink); }
+.tr-side .tr-gift-name { align-items: center; text-align: center; max-width: 100%; }
+.tr-side .tr-gift-name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+
 .syncbar {
   position: sticky; bottom: 0; z-index: 10;
   padding: 10px 0 max(10px, env(safe-area-inset-bottom));
