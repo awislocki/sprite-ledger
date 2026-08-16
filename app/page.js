@@ -22,6 +22,7 @@ import { encodeCode, decodeCode, tradeDiff, ownedKeySet } from "../lib/share.js"
 import { encodeManual } from "../lib/manual.js";
 import { SpriteRow, VariantRow } from "./ledger-rows.js";
 import { renderShareImage, shareOrDownload } from "../lib/share-image.js";
+import TradeRoundPanel from "./trade-round-panel.js";
 
 // Must match EPIC_CLIENT_ID in lib/epic.js — the auth code Epic issues here is
 // redeemed with that client's credentials. fortniteAndroidGameClient (Epic
@@ -709,6 +710,12 @@ function SharePanel({
               </div>
             )}
           </div>
+
+          <TradeRoundPanel
+            mine={mine}
+            displayName={displayName}
+            toast={toast}
+          />
         </div>
       )}
     </div>

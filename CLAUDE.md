@@ -98,6 +98,30 @@ was rebuilt with sharp in a scratchpad on 2026-07-30).
   sets robots:noindex (personal links). SharePanel's "Share my collection
   page" builds `/s/<code>`; the compare link (`/?compare=`) is the variant
   for people who already use the tracker.
+- **Trade rounds** (`lib/trade-round.js` + `lib/trade-image.js`, UI in
+  `app/trade-round-panel.js`, inside the share panel): paste 2–8 collection
+  codes and the planner works out a round where EVERY player hands over one
+  sprite and receives one they don't have. That's a permutation of the
+  players with no fixed point, so it decomposes into circles: 2-circles are
+  straight swaps (the common case), 3+-circles are pass-it-round chains —
+  which is the only way an odd group, or a group where no two people can
+  help each other directly, all trades in one round. Search = best-scoring
+  derangement over the largest workable subset (8 players → 14,833
+  orderings, ~8ms); anyone who can't be fitted in is listed as sitting out
+  rather than silently dropped. Gift choice scores catalog rarity
+  (VARIANT_ORDER position — no hand-tuned table) plus how close it takes the
+  receiver to finishing that sprite's row; seed 0 is fully deterministic and
+  "Re-roll" bumps a seed that adds bounded jitter. No conflicts are possible
+  by construction: a key you're being given is one you don't have, so you
+  can never be asked to give it away in the same round.
+  `scripts/test-trade-round.mjs` asserts the give-one/get-one invariant on
+  every case — keep it green, it's the whole contract.
+- **Canvas primitives** live in `lib/share-canvas.js`, shared by both image
+  renderers. `loadImage` and `loadDisplayFont` are both time-capped: a
+  stalled sprite request or a webfont stylesheet that never arrives fires no
+  error event, and that used to leave the share button on "Rendering…"
+  forever (found + fixed 2026-08-16 — it hit the missing/owned image too).
+  Don't remove those races.
 - **Share codes:** `FMDS1.<name>.<base64url>` = 2-byte FNV-1a checksum of
   ALL_KEYS order + 89-bit ownership bitmap (lib/share.js). Any catalog
   reorder/insert changes the checksum → old codes get a friendly
