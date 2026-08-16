@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 import { MAX_ROUND_PLAYERS } from "../../lib/trade-round.js";
-import { rememberHost, rememberMe } from "./room-session.js";
+import { rememberHost } from "./room-session.js";
 
 const SIZES = Array.from({ length: MAX_ROUND_PLAYERS - 1 }, (_, i) => i + 2);
 
@@ -44,11 +44,7 @@ export default function StartRoom() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ collectionCode: mine }),
         });
-        const joined = await join.json();
-        if (join.ok) {
-          const me = joined.room.players.find((p) => p.code === mine);
-          if (me) rememberMe(code, me.name);
-        }
+        await join.json().catch(() => null);
       }
       window.location.href = `/room/${code}`;
     } catch (err) {
@@ -71,10 +67,10 @@ export default function StartRoom() {
       </header>
 
       <p className="tr-blurb">
-        Everyone trading gets <b>one link</b>. Each player opens it and drops
-        in their collection — as an image straight from the tracker, or by
-        pasting their code. Trades appear as soon as two people are in and
-        re-plan every time somebody joins.
+        Everyone trading gets <b>one link</b>. Players can open it and drop in
+        their own collection — or <b>one person can add everybody</b>, naming
+        each player as they go. Trades appear as soon as two are in and re-plan
+        every time somebody joins.
       </p>
 
       <div className="room-setup">
@@ -94,6 +90,7 @@ export default function StartRoom() {
         {mine && (
           <p className="field-hint">
             Your collection comes with you — you&rsquo;ll already be in the room.
+            You can add everyone else from there too.
           </p>
         )}
         <button className="btn-sync" disabled={busy} onClick={start}>

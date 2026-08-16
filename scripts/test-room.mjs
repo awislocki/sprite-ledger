@@ -7,6 +7,7 @@ import {
   createRoom,
   readRoom,
   joinRoom,
+  renameInRoom,
   leaveRoom,
   completeRoom,
   publicRoom,
@@ -92,12 +93,25 @@ assert.deepEqual(one.players.map((p) => p.name), ["Adam"]);
 assert.equal(publicRoom(one).status, "waiting");
 assert.equal(publicRoom(one).expiresAt, null, "clock hasn't started");
 
-// Re-uploading replaces that player rather than seating them twice — this is
-// how somebody corrects a wrong image.
-const ADAM2 = codeFor("Adam", ["fire:Normal", "fire:Gold", "duck:Gem", "punk:Galaxy"]);
-const redone = await joinRoom(fresh.code, ADAM2);
-assert.deepEqual(redone.players.map((p) => p.name), ["Adam"], "no duplicate seat");
-assert.equal(redone.players[0].code, ADAM2, "latest upload wins");
+// Identity is the COLLECTION CODE, not the display name: re-sending the same
+// code refreshes that player instead of seating them twice.
+const again = await joinRoom(fresh.code, ADAM);
+assert.deepEqual(again.players.map((p) => p.name), ["Adam"], "same code, one seat");
+
+// A different code with the SAME name is a different person — two friends whose
+// codes both fall back to "Guardian" must not collapse into one seat.
+const ADAM_TWIN = codeFor("Adam", ["boss:Cube"]);
+const twins = await joinRoom(fresh.code, ADAM_TWIN);
+assert.equal(twins.players.length, 2, "same name, different code = two players");
+assert.deepEqual(twins.players.map((p) => p.name), ["Adam", "Adam (2)"], "names stay unique");
+await leaveRoom(fresh.code, "Adam (2)");
+
+// Anyone can name a player who isn't holding the phone — the explicit name
+// beats whatever is inside the code.
+const named = await joinRoom(fresh.code, ADAM, "Adam on the couch");
+assert.deepEqual(named.players.map((p) => p.name), ["Adam on the couch"], "explicit name wins");
+assert.equal(named.players.length, 1, "renaming an existing code doesn't add a seat");
+await renameInRoom(fresh.code, "Adam on the couch", "Adam");
 
 const two = await joinRoom(fresh.code, JAKE);
 assert.equal(two.players.length, 2);
@@ -124,11 +138,30 @@ assert.ok(
 const after = await joinRoom(fresh.code, ADAM);
 assert.equal(publicRoom(after).expiresAt, expiresAt, "clock doesn't restart");
 
-// One seat over the size is refused; the replace path above is the exception.
+// One seat over the size is refused; refreshing an existing code is the
+// exception, since it takes no new seat.
 await assert.rejects(
   () => joinRoom(fresh.code, codeFor("Gatecrasher", ["boss:Cube"])),
   /full/
 );
+
+/* ---- Renaming ---- */
+
+const renamed = await renameInRoom(fresh.code, "Jake", "Jake from work");
+assert.deepEqual(
+  renamed.players.map((p) => p.name),
+  ["Adam", "Jake from work", "Sam"],
+  "rename keeps position"
+);
+assert.equal(renamed.players[1].code, JAKE, "rename doesn't touch the collection");
+// A rename takes no seat, so it must not disturb the clock.
+assert.equal(publicRoom(renamed).expiresAt, expiresAt, "rename doesn't move the clock");
+// Colliding with somebody else gets suffixed rather than merging two players.
+const collided = await renameInRoom(fresh.code, "Jake from work", "Adam");
+assert.deepEqual(collided.players.map((p) => p.name), ["Adam", "Adam (2)", "Sam"]);
+await renameInRoom(fresh.code, "Adam (2)", "Jake");
+await assert.rejects(() => renameInRoom(fresh.code, "Nobody", "Someone"), /already left/);
+await assert.rejects(() => renameInRoom(fresh.code, "Jake", "   "), /needs a name/);
 
 // Leaving reopens the room and stops the clock.
 const short = await leaveRoom(fresh.code, "Sam");

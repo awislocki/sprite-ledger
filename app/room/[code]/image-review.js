@@ -4,10 +4,12 @@
 //
 // This step is not optional politeness — a misread tile, or a missing-list that
 // was only a partial screenshot, would put sprites in a player's collection
-// that they don't own, and the round would ask them to hand one over. So the
-// reading is shown as something to correct: every tile can be dropped, the
-// have/missing reading can be flipped, and nothing is submitted until a name
-// is typed.
+// they don't own, and the round would ask them to hand one over. So the reading
+// is shown as something to correct: every tile can be dropped, the have/missing
+// reading can be flipped, and nothing is submitted until a name is typed.
+//
+// Worded for whoever is holding the phone, which may not be the player being
+// added — one person often seats the whole room.
 
 import { useMemo, useState } from "react";
 import {
@@ -62,38 +64,38 @@ export default function ImageReview({ reading, busy, onCancel, onConfirm }) {
       </p>
 
       <div className="review-kind">
-        <span>These are sprites I</span>
+        <span>This player</span>
         <div className="chips">
           <button
             className={`chip ${kind === "owned" ? "on" : ""}`}
             aria-pressed={kind === "owned"}
             onClick={() => setKind("owned")}
           >
-            have
+            has these
           </button>
           <button
             className={`chip ${kind === "missing" ? "on" : ""}`}
             aria-pressed={kind === "missing"}
             onClick={() => setKind("missing")}
           >
-            still need
+            still needs these
           </button>
         </div>
       </div>
 
       {kind === null && (
         <div className="alert" role="alert">
-          The image doesn&rsquo;t say whether these are sprites you have or ones
-          you&rsquo;re after — pick one before joining.
+          The image doesn&rsquo;t say whether these are sprites this player has
+          or ones they&rsquo;re after — pick one before adding them.
         </div>
       )}
 
       {kind === "missing" && (
         <div className="alert" role="alert">
-          A &ldquo;still need&rdquo; list means everything else counts as yours:{" "}
-          <b>{owned.length} of {TOTAL_VARIANTS}</b> collected. If this picture
-          only showed part of your missing list, drop the round and paste your
-          code instead — otherwise you may be asked to hand over a sprite you
+          A &ldquo;still needs&rdquo; list means everything else counts as
+          theirs: <b>{owned.length} of {TOTAL_VARIANTS}</b> collected. If this
+          picture only showed part of their missing list, use their collection
+          code instead — otherwise they may be asked to hand over a sprite they
           don&rsquo;t have.
         </div>
       )}
@@ -144,7 +146,7 @@ export default function ImageReview({ reading, busy, onCancel, onConfirm }) {
           id="review-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Your name in the round"
+          placeholder="Name for this player"
           autoComplete="off"
           spellCheck={false}
           maxLength={20}
@@ -152,9 +154,9 @@ export default function ImageReview({ reading, busy, onCancel, onConfirm }) {
         <button
           className="btn-step"
           disabled={!ready || busy}
-          onClick={() => onConfirm(encodeCode(new Set(owned), name.trim()))}
+          onClick={() => onConfirm(encodeCode(new Set(owned), name.trim()), name.trim())}
         >
-          {busy ? "Joining…" : "Join"}
+          {busy ? "Adding…" : "Add"}
         </button>
       </div>
 

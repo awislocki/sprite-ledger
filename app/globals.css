@@ -432,6 +432,19 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .room-upload input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .room-upload:focus-within { outline: 2px solid var(--dust); outline-offset: 2px; }
 .room-upload.busy { opacity: 0.7; cursor: progress; }
+.room-name {
+  width: 100%; padding: 11px 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--obsidian);
+  color: var(--ink); font-size: 13px;
+}
+/* Renaming happens in place, so the chip keeps its spot in the roster. */
+.tr-player.editing { padding: 3px 6px 3px 8px; gap: 4px; }
+.tr-player.editing input {
+  width: 8.5em; min-width: 0; padding: 3px 6px; border-radius: 999px;
+  border: 1px solid var(--dust-dim); background: var(--obsidian);
+  color: var(--ink); font-family: var(--display); font-size: 12px; font-weight: 600;
+}
+.tr-player button:disabled { opacity: 0.4; }
 
 /* Confirming what the image reader saw, before it becomes a collection. */
 .room-join.review { gap: 10px; }

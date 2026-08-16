@@ -140,6 +140,16 @@ was rebuilt with sharp in a scratchpad on 2026-07-30).
   would show them a round nobody else could see). The host token is returned
   exactly once by POST /api/room, lives in the creator's localStorage, and is
   never in `publicRoom()` output — asserted in the test.
+- **Anyone with the link can add, rename, or remove ANY player** — one person
+  usually sets the whole room up from one phone, so a device is not tied to a
+  seat (there's no "which player am I" in localStorage, only the host token,
+  and only "mark complete" is gated). That makes **the collection code the
+  identity, not the display name**: re-sending the same code refreshes that
+  player, while a different code with the same name is a different person and
+  gets suffixed "(2)". Keying on the name instead would silently merge two
+  friends whose codes both fall back to "Guardian" into one seat — the test
+  pins both halves. Names are per-roster and editable; the round renders from
+  `players[].name`, not from the name inside the code.
 - **Image upload — two paths, in order of trust.** (1) *Exact*
   (`lib/png-text.js`): every share image is stamped with the collection code
   that produced it, in a PNG tEXt chunk (~67 bytes, nothing visible), so
